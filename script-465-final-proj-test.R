@@ -53,8 +53,8 @@ spp_konza <- unique(konza_id[,c(12,21)])
 spp_luquillo <- unique(luquillo_id[,15:16])
 #NAs: mainly where there are old common names being used
 
-#number of NAs:
-sev.nas <- spp_sev[is.na(spp_sev$SISRecID),]
-parkriver.nas <- spp_parkriver[is.na(spp_parkriver$SISRecID),]
-konza.nas <- spp_konza[is.na(spp_konza$SISRecID),]
-luquillo.nas <- spp_luquillo[is.na(spp_luquillo$SISRecID),]
+#number of NAs: 55 total across sites
+sev.nas <- spp_sev[is.na(spp_sev$SISRecID),] #15 species
+parkriver.nas <- spp_parkriver[is.na(spp_parkriver$SISRecID),] #9 species
+konza.nas <- spp_konza[is.na(spp_konza$SISRecID),] #18 species
+luquillo.nas <- spp_luquillo[is.na(spp_luquillo$SISRecID),] #13 species
