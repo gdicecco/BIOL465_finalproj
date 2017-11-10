@@ -85,6 +85,9 @@ konza_id$date <- as.Date(konza_id$date, format = "%Y-%m-%d")
 sev_id$date <- as.Date(sev_id$day, format = "%j", origin = paste0("1.1.",sev_id$year))
 sev_id$month <- as.numeric(format(sev_id$date, format = "%m"))
 
+luquillo_id$date <- as.Date(luquillo_id$DATE, format = "%m/%d/%Y")
+luquillo_id$month <- as.numeric(format(luquillo_id$date, format = "%m"))
+
 #add counts for spp in sev
 sev_id_count <- sev_id %>%
   group_by(year, month, day, habitat_type, stake_number, CommonName, SISRecID) %>%
@@ -126,7 +129,7 @@ luquillo_id_habitats$site <- rep("Luquillo", times = length(luquillo_id_habitats
 konza_id_habitats$site <- rep("Konza", times = length(konza_id_habitats$RECYEAR))
 
 #Merge relevant data into one dataframe for all four sites
-lter.df <- data.frame(LTER = c(sev_id_habitats$site,parkriver_id_habitats$site, luquillo_id_habitats$site,konza_id_habitats$site),
+lter.df <- data.frame(LTER = c(sev_id_habitats$site, parkriver_id_habitats$site, luquillo_id_habitats$site, konza_id_habitats$site),
                       year = c(sev_id_habitats$year,parkriver_id_habitats$year, luquillo_id_habitats$YEAR,konza_id_habitats$RECYEAR),
                       month = c(sev_id_habitats$month,parkriver_id_habitats$month, luquillo_id_habitats$month,konza_id_habitats$RECMONTH),
                       common_name = c(sev_id_habitats$CommonName,parkriver_id_habitats$Common.Name, luquillo_id_habitats$CommonName,konza_id_habitats$COMMONNAME),
@@ -167,13 +170,17 @@ annualspecial$specialist <- factor(annualspecial$specialist, c("low", "medium", 
 
 
 ####Among year beta diversity
+lter.df <- arrange(lter.df, LTER, year, month)
 
 sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
-betadiv <- matrix(nrow = 55071, ncol = 3)
+betadivresults <- matrix(nrow = 70, ncol = 3)
+betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 6), rep(3, times = 9), rep(4, times = 27))
+
 for(k in 1:4) {
   site <- sites[k]
     df <- na.omit(lter.df) %>%
     filter(LTER == site)
+    betadiv <- matrix(nrow = 40, ncol = 3)
     for(i in 1:(length(unique(df$year))-1)) {
       year <- unique(df$year)[i]
       spp <- unique(df$SISRecID[df$year == year+1 | df$year == year])
@@ -189,9 +196,13 @@ for(k in 1:4) {
       }
       betadiv[i,1] <- site
       betadiv[i,2] <- year
-      betadiv[i,3] <- sum(beta1)/sum(beta2) }
-} #stops at konza
-
+      betadiv[i,3] <- sum(beta1)/sum(beta2)
+      
+    }
+    print(length(na.omit(betadiv[,1])))
+    betadivresults[betadivresults[,1] == k, ] <- na.omit(betadiv)
+} 
+betadiv.df <- data.frame(LTER = betadivresults[,1], year = as.numeric(betadivresults[,2]), beta <- as.numeric(betadivresults[,3]))
 
 ####Beta div by %specialists
 
@@ -206,4 +217,6 @@ ggplot(richness, aes(x = year, y = richness, color = LTER)) + geom_point() + geo
 ggplot(annualspecial, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
   labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + blank
 
+#annual beta div
+ggplot(betadiv.df, aes(x = year, y = beta, color = LTER)) + geom_point() + geom_line() + blank
 
