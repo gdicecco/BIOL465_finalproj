@@ -277,3 +277,5 @@ ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom
   blank + labs(y = "Mean Bray-Curtis Index", color = "") 
 
 
+##Ideas: look at january/june abundance in Konza- different temporal abundance trends depending on habitat trait?
+##unburned vs burned grassland
