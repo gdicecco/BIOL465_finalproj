@@ -24,26 +24,27 @@ checklist.subs$Common_name <- gsub("-", " ", checklist.subs$Common_name)
 konza <- read.csv("CBP011_0.csv")
 konza$COMMONNAME <- tolower(konza$COMMONNAME)
 konza$COMMONNAME <- gsub("-", " ", konza$COMMONNAME)
-#January, April, June, October
-konza_id <- left_join(konza, checklist.subs, by = c("COMMONNAME" = "Common_name"))
+konza.sub <- filter(konza, WATERSHED == "020B" | WATERSHED == "020C" | WATERSHED == "020D" | WATERSHED == "N20B") #unburned grassland
+konza_id <- left_join(konza.sub, checklist.subs, by = c("COMMONNAME" = "Common_name"))
 
 #Park River NWR LTER
 parkriver <- read.csv("MON-EX-PRNWR-Volunteer-Birds.csv", header = TRUE)
-#Every two months, use January, April, June, October
 parkriver$Common.Name <- tolower(parkriver$Common.Name)
 parkriver$Common.Name <- gsub("-", " ", parkriver$Common.Name)
-parkriver_id <- left_join(parkriver, checklist.subs, by = c("Common.Name" = "Common_name"))
+parkriver.sub <- parkriver %>%
+  filter(Census.Unit == "marsh") #subset one habitat type
+parkriver_id <- left_join(parkriver.sub, checklist.subs, by = c("Common.Name" = "Common_name"))
 
 #Sevilleta LTER
 sev <- read.table("sev017_birdpop_09251997_0.txt", header = T, sep = ",")
-#February, May, August, December
 sev_table <- read.csv("sev-table-aou.csv") #AOU to common name table
 sev_table_col <- separate(sev_table, 1, into = c("AOU", "CommonName"), sep = "   - ") #remove separators  
 sev_table_col$AOU <- as.factor(sev_table_col$AOU)
 sev_join <- left_join(sev, sev_table_col, by = c("species_number" = "AOU")) #join common name to AOU
 sev_join$CommonName <- tolower(sev_join$CommonName)
 sev_join$CommonName <- gsub("-", " ", sev_join$CommonName)
-sev_id <- left_join(sev_join, checklist.subs, by = c("CommonName" = "Common_name")) #join ID number by common name
+sev.sub <- filter(sev_join, habitat_type == "creosote") #subset one habitat type
+sev_id <- left_join(sev.sub, checklist.subs, by = c("CommonName" = "Common_name")) #join ID number by common name
 
 #Luquillo LTER
 luquillo_LT_25 <- read.csv("ALL_ElVerde_LT_25m.csv", header = TRUE)
@@ -66,7 +67,6 @@ spp_parkriver <- unique(parkriver_id[,c(6,9)]) #102 spp
 spp_sev <- unique(sev_id[,8:9]) #83
 spp_konza <- unique(konza_id[,c(12,21)]) #137
 spp_luquillo <- unique(luquillo_id[,15:16]) #41
-#NAs: mainly where there are old common names being used
 
 #number of NAs
 sev.nas <- spp_sev[is.na(spp_sev$SISRecID),] #1
@@ -88,16 +88,27 @@ sev_id$month <- as.numeric(format(sev_id$date, format = "%m"))
 luquillo_id$date <- as.Date(luquillo_id$DATE, format = "%m/%d/%Y")
 luquillo_id$month <- as.numeric(format(luquillo_id$date, format = "%m"))
 
-#add counts for spp in sev
+#Subset relevant months to have even sampling effort across the year
+#sev: #January, May, September, December
+#Parkriver : Every two months, use January, April, June, October
+#January, April, June, October (konza)
+
+sev_id <- sev_id %>%
+  filter(month == 1 | month == 9)
+parkriver_id <- parkriver_id %>%
+  filter(month == 1 | month == 6)
+konza_id <- konza_id %>%
+  filter(RECMONTH == 1 | RECMONTH == 6)
+luquillo_id <- luquillo_id %>%
+  filter(month == 5)
+
+#add counts for spp in sev and konza
 sev_id_count <- sev_id %>%
   group_by(year, month, day, habitat_type, stake_number, CommonName, SISRecID) %>%
   summarize(Count = n())
 konza_id_count <- konza_id %>%
   group_by(RECYEAR, RECMONTH, RECDAY, WATERSHED, COMMONNAME, SISRecID) %>%
   summarize(Count = n())
-
-#assign season to each sampling event
-
 
 ######### Calculate metrics of interest #########
 #habitat specialization scores
@@ -139,7 +150,7 @@ lter.df <- data.frame(LTER = c(sev_id_habitats$site, parkriver_id_habitats$site,
 
 ####Annual species richness over time
 richness <- lter.df %>%
-  group_by(LTER, year) %>%
+  group_by(LTER, year, month) %>%
   summarize(richness = length(unique(common_name)))
 
 ####Annual %specializations etc
@@ -161,25 +172,62 @@ for(i in 1:length(lter.df$number_habitats)) {
 lter.df$specialist <- special
 
 annualspecial <- na.omit(lter.df) %>%
-  group_by(LTER, year, specialist) %>%
+  group_by(LTER, year,month, specialist) %>%
   summarize(total = length(unique(common_name)))
 
 annualspecial$specialist <- factor(annualspecial$specialist, c("low", "medium", "high"))
 
 ####Within year beta diversity
-
-
-####Among year beta diversity
+##between winter and summer, all except luquillo
 lter.df <- arrange(lter.df, LTER, year, month)
 
+sites1 <- c("Konza", "Sevilleta", "Park River")
+betadivresults1 <- matrix(nrow = 45, ncol = 4)
+betadivresults1[,1] <- c(rep(1, times = 29), rep(2, times = 6), rep(3, times = 10))
+
+for(k in 1:3) {
+  site <- sites1[k]
+  df <- na.omit(lter.df) %>%
+    filter(LTER == site)
+  betadivmonth <- matrix(nrow = length(unique(df$year)), ncol = 4)
+  for(i in 1:(length(unique(df$year)))) {
+    year <- unique(df$year)[i]
+    spp <- unique(df$SISRecID[df$year == year])
+    beta1 <- c()
+    beta2 <- c()
+    months <- unique(df$month)
+    months <- months[order(months)]
+    month <- months[1]
+    for(j in 1:length(spp)) {
+      species <- spp[j]
+      df.spp <- filter(df, SISRecID == species)
+      xj <- sum(df.spp$count[df.spp$year == year & df.spp$month == month])
+      xk <- sum(df.spp$count[df.spp$year == year & df.spp$month == months[2]])
+      beta1 <- c(beta1, abs(xj-xk))
+      beta2 <- c(beta2, abs(xj + xk))
+    }
+      betadivmonth[i,1] <- site
+      betadivmonth[i,2] <- year
+      betadivmonth[i,3] <- month
+      betadivmonth[i,4] <- sum(beta1)/sum(beta2)
+  }
+  betadivresults1[betadivresults1[,1] == k, ] <- na.omit(betadivmonth)
+}
+betadiv1.df <- data.frame(LTER = betadivresults1[,1], year = as.numeric(betadivresults1[,2]), beta = as.numeric(betadivresults1[,4]))
+betadiv_summ1 <- betadiv1.df %>%
+  group_by(LTER) %>%
+  summarize(mean = mean(beta), sd = sd(beta))
+
+####Among year beta diversity 
+##rainy/summer only
 sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
-betadivresults <- matrix(nrow = 70, ncol = 3)
-betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 6), rep(3, times = 9), rep(4, times = 27))
+betadivresults <- matrix(nrow = 63, ncol = 3)
+betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
 
 for(k in 1:4) {
   site <- sites[k]
     df <- na.omit(lter.df) %>%
-    filter(LTER == site)
+    filter(LTER == site, month == 5 | month == 6 | month == 9)
     betadiv <- matrix(nrow = 40, ncol = 3)
     for(i in 1:(length(unique(df$year))-1)) {
       year <- unique(df$year)[i]
@@ -202,7 +250,10 @@ for(k in 1:4) {
     print(length(na.omit(betadiv[,1])))
     betadivresults[betadivresults[,1] == k, ] <- na.omit(betadiv)
 } 
-betadiv.df <- data.frame(LTER = betadivresults[,1], year = as.numeric(betadivresults[,2]), beta <- as.numeric(betadivresults[,3]))
+betadiv.df <- data.frame(LTER = betadivresults[,1], year = as.numeric(betadivresults[,2]), beta = as.numeric(betadivresults[,3]))
+betadiv_summ <- betadiv.df %>%
+  group_by(LTER) %>%
+  summarize(mean = mean(beta), sd = sd(beta))
 
 ####Beta div by %specialists
 
@@ -210,13 +261,19 @@ betadiv.df <- data.frame(LTER = betadivresults[,1], year = as.numeric(betadivres
 blank <- theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
                             panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
 #species richness
-ggplot(richness, aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
+ggplot(richness[richness$month != 1,], aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
   labs(x = "Year", y = "Species Richness") + blank
 
-#annual generalist/specialist
-ggplot(annualspecial, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
+#richness generalist/specialist
+ggplot(annualspecial[annualspecial$month != 1,], aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
   labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + blank
 
-#annual beta div
-ggplot(betadiv.df, aes(x = year, y = beta, color = LTER)) + geom_point() + geom_line() + blank
+#beta div
+betadiv_summ$time <- rep("Among year", times = 4)
+betadiv_summ1$time <- rep("Within year", times = 3)
+betadiv_all <- rbind(betadiv_summ, betadiv_summ1)
+
+ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
+  blank + labs(y = "Mean Bray-Curtis Index", color = "") 
+
 
