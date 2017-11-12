@@ -19,7 +19,7 @@ setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\")
 
 ##BirdLife checklist (ID numbers)
 checklist <- read.csv("BirdLife_Checklist_V_9.1.csv", header = TRUE)
-checklist.subs <- checklist[,c(4,13)]
+checklist.subs <- checklist[,c(4,13)] #just SISRecID and common name
 #reformat character strings
 checklist.subs$Common_name <- tolower(checklist.subs$Common_name)
 checklist.subs$Common_name <- gsub("-", " ", checklist.subs$Common_name)
@@ -78,7 +78,7 @@ parkriver.nas <- spp_parkriver[is.na(spp_parkriver$SISRecID),] #0
 konza.nas <- spp_konza[is.na(spp_konza$SISRecID),] #7
 luquillo.nas <- spp_luquillo[is.na(spp_luquillo$SISRecID),] #3
 
-#make sure all sampling events for datasets have year and month
+####make sure all sampling events for datasets have year and month
 parkriver_id$date <- as.Date(parkriver_id$Date, format = "%d-%h-%y")
 parkriver_id$year <- as.numeric(format(parkriver_id$date, format = "%Y"))
 parkriver_id$month <- as.numeric(format(parkriver_id$date, format = "%m"))
