@@ -11,6 +11,7 @@ require(dplyr)
 require(ggplot2)
 
 ######### Read in datasets #########
+#on Mac: use /Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/
 setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\")
 
 ##BirdLife checklist (ID numbers)
@@ -255,7 +256,60 @@ betadiv_summ <- betadiv.df %>%
   group_by(LTER) %>%
   summarize(mean = mean(beta), sd = sd(beta))
 
-####Beta div by %specialists
+####Among year beta div by %specialists
+sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
+betadivresults <- matrix(nrow = 63, ncol = 5)
+betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+
+for(k in 1:4) {
+  site <- sites[k]
+  df <- na.omit(lter.df) %>%
+    filter(LTER == site, month == 5 | month == 6 | month == 9)
+  betadiv <- matrix(nrow = 40, ncol = 3)
+  for(i in 1:(length(unique(df$year))-1)) {
+    year <- unique(df$year)[i]
+    spp <- unique(df$SISRecID[df$year == year+1 | df$year == year])
+    betahi <- c()
+    betamed <- c()
+    betalo <- c()
+    beta2 <- c()
+    for(j in 1:length(spp)) {
+      species <- spp[j]
+      df.spp <- filter(df, SISRecID == species)
+      xj <- sum(df.spp$count[df.spp$year == year])
+      xk <- sum(df.spp$count[df.spp$year == year + 1])
+      xjhi <- sum(df.spp$count[df.spp$year == year & df.spp$specialist == "high"])
+      xkhi <- sum(df.spp$count[df.spp$year == year + 1 & df.spp$specialist == "high"])
+      xkmed <- sum(df.spp$count[df.spp$year == year & df.spp$specialist == "medium"])
+      xjmed <- sum(df.spp$count[df.spp$year == year + 1& df.spp$specialist == "medium"])
+      xklo <- sum(df.spp$count[df.spp$year == year & df.spp$specialist == "low"])
+      xjlo <- sum(df.spp$count[df.spp$year == year + 1& df.spp$specialist == "low"])
+      betahi <- c(betahi, abs(xjhi-xkhi))
+      betamed <- c(betamed, abs(xjmed - xkmed))
+      betalo <- c(betalo, abs(xjlo - xklo))
+      beta2 <- c(beta2, abs(xj + xk))
+    }
+    betadiv[i,1] <- site
+    betadiv[i,2] <- year
+    betadiv[i,3] <- sum(betahi)/sum(beta2)
+    betadiv[i,4] <- sum(betamed)/sum(beta2)
+    betadiv[i,5] <- sum(betalo)/sum(beta2)
+  }
+  print(length(na.omit(betadiv[,1])))
+  betadivresults[betadivresults[,1] == k, ] <- na.omit(betadiv)
+} 
+betadiv.special.df <- data.frame(LTER = betadivresults[,1], 
+                         year = as.numeric(betadivresults[,2]), 
+                         betahi = as.numeric(betadivresults[,3]),
+                         betamed = as.numeric(betadivresults[,4]),
+                         betalo = as.numeric(betadivresults[,5]))
+betadiv_special <- betadiv.special.df %>%
+  group_by(LTER) %>%
+  summarize(meanHi = mean(betahi), sdHi = sd(betahi),
+            meanMed = mean(betamed), sdMed = sd(betamed),
+            meanLo = mean(betalo), sdLo = sd(betalo))
+
+####Within year beta div by %specialists
 
 ####### Plots #######
 blank <- theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
@@ -275,7 +329,3 @@ betadiv_all <- rbind(betadiv_summ, betadiv_summ1)
 
 ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
   blank + labs(y = "Mean Bray-Curtis Index", color = "") 
-
-
-##Ideas: look at january/june abundance in Konza- different temporal abundance trends depending on habitat trait?
-##unburned vs burned grassland
