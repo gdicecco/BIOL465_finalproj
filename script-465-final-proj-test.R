@@ -14,6 +14,9 @@ require(ggplot2)
 #on Mac: use /Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/
 setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\")
 
+#For each dataset: change character strings to all lowercase and remove hyphens
+#improves matching rate by common name between LTER datasets and BirdLife checklist
+
 ##BirdLife checklist (ID numbers)
 checklist <- read.csv("BirdLife_Checklist_V_9.1.csv", header = TRUE)
 checklist.subs <- checklist[,c(4,13)]
