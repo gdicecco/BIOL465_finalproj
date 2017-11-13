@@ -256,6 +256,8 @@ for(k in 1:4) {
     betadivresults[betadivresults[,1] == k, ] <- na.omit(betadiv)
 } 
 betadiv.df <- data.frame(LTER = betadivresults[,1], year = as.numeric(betadivresults[,2]), beta = as.numeric(betadivresults[,3]))
+betadiv.df <- betadiv.df[betadiv.df$beta != 1.0,] #remove years where there was missing data in the following year
+missing.beta <- betadiv.df[betadiv.df$beta == 1.0,]
 betadiv_summ <- betadiv.df %>%
   group_by(LTER) %>%
   summarize(mean = mean(beta), sd = sd(beta))
@@ -390,6 +392,10 @@ ggplot(annualspecial[annualspecial$month != 1,], aes(x = year, y = total, fill =
 betadiv_summ$time <- rep("Among year", times = 4)
 betadiv_summ1$time <- rep("Within year", times = 3)
 betadiv_all <- rbind(betadiv_summ, betadiv_summ1)
+
+#Time series, among year
+arrange(betadiv.df, LTER, year)
+ggplot(betadiv.df, aes(x = year, y = beta, color = LTER)) + geom_point() + geom_line() + blank
 
 ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
   blank + labs(y = "Mean Bray-Curtis Index", color = "") 
