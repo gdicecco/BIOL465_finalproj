@@ -382,7 +382,9 @@ ggplot(richness[richness$month != 1,], aes(x = year, y = richness, color = LTER)
 
 #richness generalist/specialist
 ggplot(annualspecial[annualspecial$month != 1,], aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
-  labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + blank
+  labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + blank + scale_fill_discrete(name = "Number of Habitats Used",
+                                                                                                         breaks = c("low", "medium", "high"),
+                                                                                                         labels = c("Low", "Medium", "High"))
 
 #beta div
 betadiv_summ$time <- rep("Among year", times = 4)
