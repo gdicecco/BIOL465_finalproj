@@ -9,6 +9,7 @@ require(traits)
 require(tidyr)
 require(dplyr)
 require(ggplot2)
+require(gridExtra)
 
 ######### Read in datasets #########
 #on Mac: use /Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/
@@ -268,7 +269,7 @@ for(k in 1:4) {
   site <- sites[k]
   df <- na.omit(lter.df) %>%
     filter(LTER == site, month == 5 | month == 6 | month == 9)
-  betadiv <- matrix(nrow = 40, ncol = 3)
+  betadiv <- matrix(nrow = 40, ncol = 5)
   for(i in 1:(length(unique(df$year))-1)) {
     year <- unique(df$year)[i]
     spp <- unique(df$SISRecID[df$year == year+1 | df$year == year])
@@ -310,10 +311,68 @@ betadiv_special <- betadiv.special.df %>%
   group_by(LTER) %>%
   summarize(meanHi = mean(betahi), sdHi = sd(betahi),
             meanMed = mean(betamed), sdMed = sd(betamed),
-            meanLo = mean(betalo), sdLo = sd(betalo))
+            meanLo = mean(betalo), sdLo = sd(betalo),
+            summean = sum(mean(betahi), mean(betamed), mean(betalo)))
 
 ####Within year beta div by %specialists
+lter.df <- arrange(lter.df, LTER, year, month)
 
+sites1 <- c("Konza", "Sevilleta", "Park River")
+betadivresults1 <- matrix(nrow = 45, ncol = 6)
+betadivresults1[,1] <- c(rep(1, times = 29), rep(2, times = 6), rep(3, times = 10))
+
+for(k in 1:3) {
+  site <- sites1[k]
+  df <- na.omit(lter.df) %>%
+    filter(LTER == site)
+  betadivmonth <- matrix(nrow = length(unique(df$year)), ncol = 6)
+  for(i in 1:(length(unique(df$year)))) {
+    year <- unique(df$year)[i]
+    spp <- unique(df$SISRecID[df$year == year])
+    betahi <- c()
+    betamed <- c()
+    betalo <- c()
+    beta2 <- c()
+    months <- unique(df$month)
+    months <- months[order(months)]
+    month <- months[1]
+    for(j in 1:length(spp)) {
+      species <- spp[j]
+      df.spp <- filter(df, SISRecID == species)
+      xj <- sum(df.spp$count[df.spp$year == year])
+      xk <- sum(df.spp$count[df.spp$year == year + 1])
+      xjhi <- sum(df.spp$count[df.spp$year == year & df.spp$specialist == "high"])
+      xkhi <- sum(df.spp$count[df.spp$year == year + 1 & df.spp$specialist == "high"])
+      xkmed <- sum(df.spp$count[df.spp$year == year & df.spp$specialist == "medium"])
+      xjmed <- sum(df.spp$count[df.spp$year == year + 1& df.spp$specialist == "medium"])
+      xklo <- sum(df.spp$count[df.spp$year == year & df.spp$specialist == "low"])
+      xjlo <- sum(df.spp$count[df.spp$year == year + 1& df.spp$specialist == "low"])
+      betahi <- c(betahi, abs(xjhi-xkhi))
+      betamed <- c(betamed, abs(xjmed - xkmed))
+      betalo <- c(betalo, abs(xjlo - xklo))
+      beta2 <- c(beta2, abs(xj + xk))
+    }
+    betadivmonth[i,1] <- site
+    betadivmonth[i,2] <- year
+    betadivmonth[i,3] <- month
+    betadivmonth[i,4] <- sum(betahi)/sum(beta2)
+    betadivmonth[i,5] <- sum(betamed)/sum(beta2)
+    betadivmonth[i,6] <- sum(betalo)/sum(beta2)
+  }
+  betadivresults1[betadivresults1[,1] == k, ] <- na.omit(betadivmonth)
+}
+betadiv1.special.df <- data.frame(LTER = betadivresults1[,1], 
+                          year = as.numeric(betadivresults1[,2]), 
+                          betahi = as.numeric(betadivresults1[,4]),
+                          betamed = as.numeric(betadivresults1[,5]),
+                          betalo = as.numeric(betadivresults1[,6]))
+betadiv1_special <- betadiv1.special.df %>%
+  group_by(LTER) %>%
+  summarize(meanHi = mean(betahi), sdHi = sd(betahi),
+            meanMed = mean(betamed), sdMed = sd(betamed),
+            meanLo = mean(betalo), sdLo = sd(betalo),
+            summean = sum(mean(betahi), mean(betamed), mean(betalo)))
+            
 ####### Plots #######
 blank <- theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
                             panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
@@ -332,3 +391,21 @@ betadiv_all <- rbind(betadiv_summ, betadiv_summ1)
 
 ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
   blank + labs(y = "Mean Bray-Curtis Index", color = "") 
+
+betadiv_sp_sum <- rbind(data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanHi, sd = betadiv_special$sdHi, cat = rep("High", times = 4)),
+                        data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanMed, sd = betadiv_special$sdMed, cat = rep("Medium", times = 4)),
+                        data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanLo, sd = betadiv_special$sdLo, cat = rep("Low", times = 4)))
+amongplot <- ggplot(betadiv_sp_sum, aes(x = LTER, y = mean, color = cat)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
+  labs(y = "Mean Bray-Curtis Index", color = "Number of Habitats Used", x = "") + blank + ggtitle("Among Year") +
+  theme(legend.position = c(0.05, 0.95), 
+        legend.justification = c(0, 1),
+        plot.title = element_text(hjust = 0.5))
+
+
+betadiv1_sp_sum <- rbind(data.frame(LTER = betadiv1_special$LTER, mean = betadiv1_special$meanHi, sd = betadiv1_special$sdHi, cat = rep("High", times = 3)),
+                         data.frame(LTER = betadiv1_special$LTER, mean = betadiv1_special$meanMed, sd = betadiv1_special$sdMed, cat = rep("Medium", times = 3)),
+                         data.frame(LTER = betadiv1_special$LTER, mean = betadiv1_special$meanLo, sd = betadiv1_special$sdLo, cat = rep("Low", times = 3)))
+withinplot <- ggplot(betadiv1_sp_sum, aes(x = LTER, y = mean, color = cat)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
+  labs(y = "", x = "") + blank + ggtitle("Within Year") + theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) 
+
+grid.arrange(amongplot, withinplot, ncol = 2)
