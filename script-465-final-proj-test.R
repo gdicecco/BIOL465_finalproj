@@ -12,15 +12,16 @@ require(ggplot2)
 require(gridExtra)
 
 ######### Read in datasets #########
-#on Mac: use /Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/
-setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\")
+setwd("/Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/") #Mac
+#setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\") #Windows
 
 #For each dataset: change character strings to all lowercase and remove hyphens
 #improves matching rate by common name between LTER datasets and BirdLife checklist
 
 ##BirdLife checklist (ID numbers)
-checklist <- read.csv("BirdLife_Checklist_V_9.1.csv", header = TRUE)
+checklist <- read.csv("BirdLife_Checklist_V_9.1.csv", header = TRUE, stringsAsFactors = F)
 checklist.subs <- checklist[,c(4,13)] #just SISRecID and common name
+checklist.subs$Common_name <- iconv(checklist.subs$Common_name,"WINDOWS-1252","UTF-8") #if error invalid multibyte string
 #reformat character strings
 checklist.subs$Common_name <- tolower(checklist.subs$Common_name)
 checklist.subs$Common_name <- gsub("-", " ", checklist.subs$Common_name)
@@ -48,8 +49,8 @@ sev_table_col$AOU <- as.factor(sev_table_col$AOU)
 sev_join <- left_join(sev, sev_table_col, by = c("species_number" = "AOU")) #join common name to AOU
 sev_join$CommonName <- tolower(sev_join$CommonName)
 sev_join$CommonName <- gsub("-", " ", sev_join$CommonName)
-sev.sub <- filter(sev_join, habitat_type == "creosote") #subset one habitat type
-sev_id <- left_join(sev.sub, checklist.subs, by = c("CommonName" = "Common_name")) #join ID number by common name
+sev_id <- filter(sev_join, habitat_type == "creosote") %>% #subset one habitat type
+          left_join(checklist.subs, by = c("CommonName" = "Common_name")) #join ID number by common name
 
 #Luquillo LTER
 luquillo_LT_25 <- read.csv("ALL_ElVerde_LT_25m.csv", header = TRUE)
@@ -61,8 +62,7 @@ luquillo_sppnames <- read.csv("luquillo_spp_code.csv") #five letter codes to com
 luquillo_sppnames$Code <- substr(luquillo_sppnames$Code, 0, 5) #remove weird symbols
 #Wide to long transformation
 luquillo_long <- gather(luquillo, Species, Abundance, 11:53)
-luquillo_long_naomit <- na.omit(luquillo_long) #remove NAs
-luquillo_commonnames <- left_join(luquillo_long_naomit, luquillo_sppnames, by = c("Species" = "Code")) #add common names
+luquillo_commonnames <- left_join(na.omit(luquillo_long), luquillo_sppnames, by = c("Species" = "Code")) #add common names
 luquillo_commonnames$CommonName <- tolower(luquillo_commonnames$CommonName)
 luquillo_commonnames$CommonName <- gsub("-", " ", luquillo_commonnames$CommonName)
 luquillo_id <- left_join(luquillo_commonnames, checklist.subs, by = c("CommonName" = "Common_name"))
@@ -79,6 +79,9 @@ parkriver.nas <- spp_parkriver[is.na(spp_parkriver$SISRecID),] #0
 konza.nas <- spp_konza[is.na(spp_konza$SISRecID),] #7
 luquillo.nas <- spp_luquillo[is.na(spp_luquillo$SISRecID),] #3
 
+konza_id <- konza_id[!konza_id$COMMONNAME %in% konza.nas$COMMONNAME,]
+luquillo_id <- luquillo_id[!luquillo_id$CommonName %in% luquillo.nas$CommonName,]
+
 ####make sure all sampling events for datasets have year and month
 parkriver_id$date <- as.Date(parkriver_id$Date, format = "%d-%h-%y")
 parkriver_id$year <- as.numeric(format(parkriver_id$date, format = "%Y"))
@@ -94,9 +97,9 @@ luquillo_id$date <- as.Date(luquillo_id$DATE, format = "%m/%d/%Y")
 luquillo_id$month <- as.numeric(format(luquillo_id$date, format = "%m"))
 
 #Subset relevant months to have even sampling effort across the year
-#sev: #January, May, September, December
-#Parkriver : Every two months, use January, April, June, October
-#January, April, June, October (konza)
+#Sevilleta: #January, May, September, December
+#Park River : Every two months, use January, April, June, October
+#Konza: January, April, June, October
 
 sev_id <- sev_id %>%
   filter(month == 1 | month == 9)
@@ -182,6 +185,11 @@ annualspecial <- na.omit(lter.df) %>%
 
 annualspecial$specialist <- factor(annualspecial$specialist, c("low", "medium", "high"))
 
+####Abundance trends for trait groups
+abund.annual <- lter.df %>%
+  group_by(LTER, year, month, specialist) %>%
+  summarize(abund = sum(count))
+  
 ####Within year beta diversity
 ##between winter and summer, all except luquillo
 lter.df <- arrange(lter.df, LTER, year, month)
@@ -383,10 +391,21 @@ ggplot(richness[richness$month != 1,], aes(x = year, y = richness, color = LTER)
   labs(x = "Year", y = "Species Richness") + blank
 
 #richness generalist/specialist
-ggplot(annualspecial[annualspecial$month != 1,], aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
-  labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + blank + scale_fill_discrete(name = "Number of Habitats Used",
-                                                                                                         breaks = c("low", "medium", "high"),
-                                                                                                         labels = c("Low", "Medium", "High"))
+annual.plot <- annualspecial[annualspecial$month != 1,]
+annual.plot$specialist <- factor(annual.plot$specialist, levels = c("high", "medium", "low"))
+ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
+  labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + 
+  blank + scale_fill_discrete(name = "Number of Habitats Used", 
+                              breaks = c("low", "medium", "high"), 
+                              labels = c("Low", "Medium", "High"))
+
+#annual abundance
+abund.annual$specialist <- factor(abund.annual$specialist, levels = c("high", "medium", "low"))
+ggplot(abund.annual[abund.annual$month != 1,], aes(x = year, y = abund, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
+  labs(x = "Year", y = "Abundance", fill = "Number of Habitats Used") + 
+  blank + scale_fill_discrete(name = "Number of Habitats Used", 
+                              breaks = c("low", "medium", "high"), 
+                              labels = c("Low", "Medium", "High"))
 
 #beta div
 betadiv_summ$time <- rep("Among year", times = 4)
@@ -395,7 +414,11 @@ betadiv_all <- rbind(betadiv_summ, betadiv_summ1)
 
 #Time series, among year
 arrange(betadiv.df, LTER, year)
-ggplot(betadiv.df, aes(x = year, y = beta, color = LTER)) + geom_point() + geom_line() + blank
+ggplot(betadiv.df, aes(x = year, y = beta, color = LTER)) + geom_point() + geom_line() +
+  blank + labs(x = "Year", y = "Bray-Curtis Index") + ggtitle("Among year beta diversity") +
+  theme(legend.position = c(0.8, 0.95), 
+              legend.justification = c(0, 1),
+        plot.title = element_text(hjust = 0.5))
 
 ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
   blank + labs(y = "Mean Bray-Curtis Index", color = "") 
@@ -403,16 +426,17 @@ ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom
 betadiv_sp_sum <- rbind(data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanHi, sd = betadiv_special$sdHi, cat = rep("High", times = 4)),
                         data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanMed, sd = betadiv_special$sdMed, cat = rep("Medium", times = 4)),
                         data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanLo, sd = betadiv_special$sdLo, cat = rep("Low", times = 4)))
+betadiv_sp_sum$cat <- factor(betadiv_sp_sum$cat, levels = c("High", "Medium", "Low"))
 amongplot <- ggplot(betadiv_sp_sum, aes(x = LTER, y = mean, color = cat)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
   labs(y = "Mean Bray-Curtis Index", color = "Number of Habitats Used", x = "") + blank + ggtitle("Among Year") +
   theme(legend.position = c(0.05, 0.95), 
         legend.justification = c(0, 1),
         plot.title = element_text(hjust = 0.5))
 
-
 betadiv1_sp_sum <- rbind(data.frame(LTER = betadiv1_special$LTER, mean = betadiv1_special$meanHi, sd = betadiv1_special$sdHi, cat = rep("High", times = 3)),
                          data.frame(LTER = betadiv1_special$LTER, mean = betadiv1_special$meanMed, sd = betadiv1_special$sdMed, cat = rep("Medium", times = 3)),
                          data.frame(LTER = betadiv1_special$LTER, mean = betadiv1_special$meanLo, sd = betadiv1_special$sdLo, cat = rep("Low", times = 3)))
+betadiv1_sp_sum$cat <- factor(betadiv1_sp_sum$cat, levels = c("High", "Medium", "Low"))
 withinplot <- ggplot(betadiv1_sp_sum, aes(x = LTER, y = mean, color = cat)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
   labs(y = "", x = "") + blank + ggtitle("Within Year") + theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) 
 
