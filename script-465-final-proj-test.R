@@ -12,8 +12,8 @@ require(ggplot2)
 require(gridExtra)
 
 ######### Read in datasets #########
-setwd("/Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/") #Mac
-#setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\") #Windows
+#setwd("/Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/") #Mac
+setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\") #Windows
 
 #For each dataset: change character strings to all lowercase and remove hyphens
 #improves matching rate by common name between LTER datasets and BirdLife checklist
@@ -81,6 +81,7 @@ luquillo.nas <- spp_luquillo[is.na(spp_luquillo$SISRecID),] #3
 
 konza_id <- konza_id[!konza_id$COMMONNAME %in% konza.nas$COMMONNAME,]
 luquillo_id <- luquillo_id[!luquillo_id$CommonName %in% luquillo.nas$CommonName,]
+sev_id <- sev_id[!sev_id$CommonName %in% sev.nas$CommonName,]
 
 ####make sure all sampling events for datasets have year and month
 parkriver_id$date <- as.Date(parkriver_id$Date, format = "%d-%h-%y")
@@ -100,7 +101,7 @@ luquillo_id$month <- as.numeric(format(luquillo_id$date, format = "%m"))
 #Sevilleta: #January, May, September, December
 #Park River : Every two months, use January, April, June, October
 #Konza: January, April, June, October
-
+#Luquillo: wet season May, dry season late Nov through late April if use months 11, 1, 2, 3 - 1990-1995
 sev_id <- sev_id %>%
   filter(month == 1 | month == 9)
 parkriver_id <- parkriver_id %>%
@@ -108,7 +109,7 @@ parkriver_id <- parkriver_id %>%
 konza_id <- konza_id %>%
   filter(RECMONTH == 1 | RECMONTH == 6)
 luquillo_id <- luquillo_id %>%
-  filter(month == 5)
+  filter(month == 5 | month == 1 | month == 2 | month == 11 | month == 3)
 
 #add counts for spp in sev and konza
 sev_id_count <- sev_id %>%
@@ -133,9 +134,9 @@ num_habitats <- data.frame(SISRecID = finescale_habitats[,1], Number_habitats = 
 #habitats range from 0-30
 #determine categories: lo medium hi specialization
 hist(num_habitats$Number_habitats)
-#0-10: hi
-#10-20: medium
-#20-30: lo #ie generalist
+#0-5: lo
+#5-15: medium
+#15-30: hi (ie generalist)
 
 sev_id_habitats <- left_join(sev_id_count, num_habitats, by = "SISRecID")
 parkriver_id_habitats <- left_join(parkriver_id, num_habitats, by = "SISRecID")
@@ -168,11 +169,11 @@ for(i in 1:length(lter.df$number_habitats)) {
   num <- lter.df$number_habitats[i]
   if(is.na(num)) {
     special <- c(special, NA)
-  } else if (0 < num & num <= 10) {
+  } else if (0 < num & num <= 5) {
     special <- c(special, "low")
-  } else if(10 < num & num <= 20) {
+  } else if(5 < num & num <= 15) {
     special <- c(special, "medium")
-  } else if(20 < num) {
+  } else if(15 < num) {
     special <- c(special, "high")
   } 
 }
@@ -190,47 +191,6 @@ abund.annual <- lter.df %>%
   group_by(LTER, year, month, specialist) %>%
   summarize(abund = sum(count))
   
-####Within year beta diversity
-##between winter and summer, all except luquillo
-lter.df <- arrange(lter.df, LTER, year, month)
-
-sites1 <- c("Konza", "Sevilleta", "Park River")
-betadivresults1 <- matrix(nrow = 45, ncol = 4)
-betadivresults1[,1] <- c(rep(1, times = 29), rep(2, times = 6), rep(3, times = 10))
-
-for(k in 1:3) {
-  site <- sites1[k]
-  df <- na.omit(lter.df) %>%
-    filter(LTER == site)
-  betadivmonth <- matrix(nrow = length(unique(df$year)), ncol = 4)
-  for(i in 1:(length(unique(df$year)))) {
-    year <- unique(df$year)[i]
-    spp <- unique(df$SISRecID[df$year == year])
-    beta1 <- c()
-    beta2 <- c()
-    months <- unique(df$month)
-    months <- months[order(months)]
-    month <- months[1]
-    for(j in 1:length(spp)) {
-      species <- spp[j]
-      df.spp <- filter(df, SISRecID == species)
-      xj <- sum(df.spp$count[df.spp$year == year & df.spp$month == month])
-      xk <- sum(df.spp$count[df.spp$year == year & df.spp$month == months[2]])
-      beta1 <- c(beta1, abs(xj-xk))
-      beta2 <- c(beta2, abs(xj + xk))
-    }
-      betadivmonth[i,1] <- site
-      betadivmonth[i,2] <- year
-      betadivmonth[i,3] <- month
-      betadivmonth[i,4] <- sum(beta1)/sum(beta2)
-  }
-  betadivresults1[betadivresults1[,1] == k, ] <- na.omit(betadivmonth)
-}
-betadiv1.df <- data.frame(LTER = betadivresults1[,1], year = as.numeric(betadivresults1[,2]), beta = as.numeric(betadivresults1[,4]))
-betadiv_summ1 <- betadiv1.df %>%
-  group_by(LTER) %>%
-  summarize(mean = mean(beta), sd = sd(beta))
-
 ####Among year beta diversity 
 ##rainy/summer only
 sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
@@ -324,64 +284,36 @@ betadiv_special <- betadiv.special.df %>%
             meanLo = mean(betalo), sdLo = sd(betalo),
             summean = sum(mean(betahi), mean(betamed), mean(betalo)))
 
-####Within year beta div by %specialists
-lter.df <- arrange(lter.df, LTER, year, month)
+####Within year beta diversity 
+##between winter and summer, all except luquillo (compare wet and dry season)
+lter.df.subs <- lter.df %>%
+  arrange(LTER, year, month) %>%
+  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>% #create season code
+  group_by(LTER, year) %>%
+  summarize(total = length(unique(season))) %>%
+  filter(total == 2) %>%
+  left_join(lter.df, by = c("LTER", "year"))
+  
+beta.within <- lter.df.subs %>%
+  group_by(LTER, year, common_name) %>%
+  summarize(xj = sum(count[season == "S"]), xk = sum(count[season == "W"])) %>%
+  group_by(LTER, year) %>%
+  summarize(beta = sum(abs(xj - xk))/sum(abs(xj+xk)))
 
-sites1 <- c("Konza", "Sevilleta", "Park River")
-betadivresults1 <- matrix(nrow = 45, ncol = 6)
-betadivresults1[,1] <- c(rep(1, times = 29), rep(2, times = 6), rep(3, times = 10))
-
-for(k in 1:3) {
-  site <- sites1[k]
-  df <- na.omit(lter.df) %>%
-    filter(LTER == site)
-  betadivmonth <- matrix(nrow = length(unique(df$year)), ncol = 6)
-  for(i in 1:(length(unique(df$year)))) {
-    year <- unique(df$year)[i]
-    spp <- unique(df$SISRecID[df$year == year])
-    betahi <- c()
-    betamed <- c()
-    betalo <- c()
-    beta2 <- c()
-    months <- unique(df$month)
-    months <- months[order(months)]
-    month <- months[1]
-    for(j in 1:length(spp)) {
-      species <- spp[j]
-      df.spp <- filter(df, SISRecID == species)
-      xj <- sum(df.spp$count[df.spp$year == year])
-      xk <- sum(df.spp$count[df.spp$year == year + 1])
-      xjhi <- sum(df.spp$count[df.spp$year == year & df.spp$specialist == "high"])
-      xkhi <- sum(df.spp$count[df.spp$year == year + 1 & df.spp$specialist == "high"])
-      xkmed <- sum(df.spp$count[df.spp$year == year & df.spp$specialist == "medium"])
-      xjmed <- sum(df.spp$count[df.spp$year == year + 1& df.spp$specialist == "medium"])
-      xklo <- sum(df.spp$count[df.spp$year == year & df.spp$specialist == "low"])
-      xjlo <- sum(df.spp$count[df.spp$year == year + 1& df.spp$specialist == "low"])
-      betahi <- c(betahi, abs(xjhi-xkhi))
-      betamed <- c(betamed, abs(xjmed - xkmed))
-      betalo <- c(betalo, abs(xjlo - xklo))
-      beta2 <- c(beta2, abs(xj + xk))
-    }
-    betadivmonth[i,1] <- site
-    betadivmonth[i,2] <- year
-    betadivmonth[i,3] <- month
-    betadivmonth[i,4] <- sum(betahi)/sum(beta2)
-    betadivmonth[i,5] <- sum(betamed)/sum(beta2)
-    betadivmonth[i,6] <- sum(betalo)/sum(beta2)
-  }
-  betadivresults1[betadivresults1[,1] == k, ] <- na.omit(betadivmonth)
-}
-betadiv1.special.df <- data.frame(LTER = betadivresults1[,1], 
-                          year = as.numeric(betadivresults1[,2]), 
-                          betahi = as.numeric(betadivresults1[,4]),
-                          betamed = as.numeric(betadivresults1[,5]),
-                          betalo = as.numeric(betadivresults1[,6]))
-betadiv1_special <- betadiv1.special.df %>%
+beta.within.sum <- beta.within %>%
   group_by(LTER) %>%
-  summarize(meanHi = mean(betahi), sdHi = sd(betahi),
-            meanMed = mean(betamed), sdMed = sd(betamed),
-            meanLo = mean(betalo), sdLo = sd(betalo),
-            summean = sum(mean(betahi), mean(betamed), mean(betalo)))
+  summarize(mean = mean(beta), sd = sd(beta))
+
+####Within year beta div by %specialists
+beta.within.sp <- lter.df.subs %>%
+  group_by(LTER, year, specialist, common_name) %>%
+  summarize(xj = sum(count[season == "S"]), xk = sum(count[season == "W"]))%>%
+  group_by(LTER, year, specialist) %>%
+  summarize(beta = sum(abs(xj - xk))/sum(abs(xj + xk))) ####here denominator needs to be for all species in the year
+
+beta.within.sp.sum <- beta.within.sp %>%
+  group_by(LTER, specialist) %>%
+  summarize(mean = mean(beta), sd = sd(beta))
             
 ####### Plots #######
 blank <- theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
