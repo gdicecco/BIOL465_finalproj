@@ -298,7 +298,7 @@ beta.within <- lter.df.subs %>%
   group_by(LTER, year, common_name) %>%
   summarize(xj = sum(count[season == "S"]), xk = sum(count[season == "W"])) %>%
   group_by(LTER, year) %>%
-  summarize(beta = sum(abs(xj - xk))/sum(abs(xj+xk)))
+  summarize(beta = sum(abs(xj - xk))/sum(abs(xj+xk)), denom = sum(abs(xj + xk)))
 
 beta.within.sum <- beta.within %>%
   group_by(LTER) %>%
@@ -308,8 +308,9 @@ beta.within.sum <- beta.within %>%
 beta.within.sp <- lter.df.subs %>%
   group_by(LTER, year, specialist, common_name) %>%
   summarize(xj = sum(count[season == "S"]), xk = sum(count[season == "W"]))%>%
+  left_join(beta.within, by = c("LTER", "year"))
   group_by(LTER, year, specialist) %>%
-  summarize(beta = sum(abs(xj - xk))/sum(abs(xj + xk))) ####here denominator needs to be for all species in the year
+  summarize(beta = sum(abs(xj - xk))/denom) #did not test this yet 11/15 5:26 PM
 
 beta.within.sp.sum <- beta.within.sp %>%
   group_by(LTER, specialist) %>%
