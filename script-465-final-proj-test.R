@@ -9,7 +9,7 @@ require(traits)
 require(tidyr)
 require(dplyr)
 require(ggplot2)
-require(gridExtra)
+require(cowplot)
 
 ######### Read in datasets #########
 #setwd("/Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/") #Mac
@@ -143,12 +143,12 @@ parkriver_id_habitats <- left_join(parkriver_id, num_habitats, by = "SISRecID")
 konza_id_habitats <- left_join(konza_id_count, num_habitats, by = "SISRecID")
 luquillo_id_habitats <- left_join(luquillo_id, num_habitats, by = "SISRecID")
 
+#Merge relevant data into one dataframe for all four sites
 sev_id_habitats$site <- rep("Sevilleta", times = length(sev_id_habitats$year))
 parkriver_id_habitats$site <- rep("Park River", times = length(parkriver_id_habitats$year))
 luquillo_id_habitats$site <- rep("Luquillo", times = length(luquillo_id_habitats$YEAR))
 konza_id_habitats$site <- rep("Konza", times = length(konza_id_habitats$RECYEAR))
 
-#Merge relevant data into one dataframe for all four sites
 lter.df <- data.frame(LTER = c(sev_id_habitats$site, parkriver_id_habitats$site, luquillo_id_habitats$site, konza_id_habitats$site),
                       year = c(sev_id_habitats$year,parkriver_id_habitats$year, luquillo_id_habitats$YEAR,konza_id_habitats$RECYEAR),
                       month = c(sev_id_habitats$month,parkriver_id_habitats$month, luquillo_id_habitats$month,konza_id_habitats$RECMONTH),
@@ -191,8 +191,9 @@ abund.annual <- lter.df %>%
   group_by(LTER, year, month, specialist) %>%
   summarize(abund = sum(count))
   
-####Among year beta diversity 
+####Among year BC Index 
 ##rainy/summer only
+#can this be cleaned up with pipes?
 sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
 betadivresults <- matrix(nrow = 63, ncol = 3)
 betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
@@ -230,7 +231,7 @@ betadiv_summ <- betadiv.df %>%
   group_by(LTER) %>%
   summarize(mean = mean(beta), sd = sd(beta))
 
-####Among year beta div by %specialists
+####Among year BC Index by %specialists
 sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
 betadivresults <- matrix(nrow = 63, ncol = 5)
 betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
@@ -284,7 +285,7 @@ betadiv_special <- betadiv.special.df %>%
             meanLo = mean(betalo), sdLo = sd(betalo),
             summean = sum(mean(betahi), mean(betamed), mean(betalo)))
 
-####Within year beta diversity 
+####Within year BC Index 
 ##between winter and summer, all except luquillo (compare wet and dry season)
 lter.df.subs <- lter.df %>%
   arrange(LTER, year, month) %>%
@@ -295,6 +296,7 @@ lter.df.subs <- lter.df %>%
   left_join(lter.df, by = c("LTER", "year"))
   
 beta.within <- lter.df.subs %>%
+  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
   group_by(LTER, year, common_name) %>%
   summarize(xj = sum(count[season == "S"]), xk = sum(count[season == "W"])) %>%
   group_by(LTER, year) %>%
@@ -304,21 +306,55 @@ beta.within.sum <- beta.within %>%
   group_by(LTER) %>%
   summarize(mean = mean(beta), sd = sd(beta))
 
-####Within year beta div by %specialists
+####Within year BC Index by %specialists
 beta.within.sp <- lter.df.subs %>%
+  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
   group_by(LTER, year, specialist, common_name) %>%
   summarize(xj = sum(count[season == "S"]), xk = sum(count[season == "W"]))%>%
-  left_join(beta.within, by = c("LTER", "year"))
+  left_join(beta.within, by = c("LTER", "year")) %>%
   group_by(LTER, year, specialist) %>%
-  summarize(beta = sum(abs(xj - xk))/denom) #did not test this yet 11/15 5:26 PM
+  summarize(beta = sum(abs(xj - xk))/mean(denom)) #did not test this yet 11/15 5:26 PM
 
 beta.within.sp.sum <- beta.within.sp %>%
   group_by(LTER, specialist) %>%
   summarize(mean = mean(beta), sd = sd(beta))
             
+#### Jaccard
+sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
+betadivresults <- matrix(nrow = 63, ncol = 3)
+betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+
+for(k in 1:4) {
+  site <- sites[k]
+  df <- na.omit(lter.df) %>%
+    filter(LTER == site, month == 5 | month == 6 | month == 9)
+  betadiv <- matrix(nrow = 40, ncol = 3)
+  for(i in 1:(length(unique(df$year))-1)) {
+    year <- unique(df$year)[i]
+    total <- unique(df$SISRecID[df$year == year+1 | df$year == year])
+    yr <- unique(df$SISRecID[df$year == year])
+    yr1 <- unique(df$SISRecID[df$year == year + 1])
+    shared <- yr[yr %in% yr1]
+    betadiv[i,1] <- site
+    betadiv[i,2] <- year
+    betadiv[i,3] <- length(shared)/length(total)
+  }
+  print(length(na.omit(betadiv[,1])))
+  betadivresults[betadivresults[,1] == k, ] <- na.omit(betadiv)
+  }
+  
+jaccard.df <- data.frame(LTER = betadivresults[,1], year = as.numeric(betadivresults[,2]), beta = as.numeric(betadivresults[,3]))
+jaccard.df <- betadiv.df[betadiv.df$beta != 0,] #remove years where there was missing data in the following year
+missing.jaccard <- betadiv.df[betadiv.df$beta == 0,]
+jaccard_summ <- jaccard.df %>%
+  group_by(LTER) %>%
+  summarize(mean = mean(beta), sd = sd(beta))
+
+
+
 ####### Plots #######
-blank <- theme_bw() + theme(panel.border = element_blank(), panel.grid.major = element_blank(),
-                            panel.grid.minor = element_blank(), axis.line = element_line(colour = "black"))
+blank <- theme_bw() + theme(panel.grid.major = element_blank(),
+                            panel.grid.minor = element_blank())
 #species richness
 ggplot(richness[richness$month != 1,], aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
   labs(x = "Year", y = "Species Richness") + blank
@@ -326,7 +362,7 @@ ggplot(richness[richness$month != 1,], aes(x = year, y = richness, color = LTER)
 #richness generalist/specialist
 annual.plot <- annualspecial[annualspecial$month != 1,]
 annual.plot$specialist <- factor(annual.plot$specialist, levels = c("high", "medium", "low"))
-ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
+richplot <- ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack", color = "white") + facet_grid(~LTER) +
   labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + 
   blank + scale_fill_discrete(name = "Number of Habitats Used", 
                               breaks = c("low", "medium", "high"), 
@@ -334,16 +370,18 @@ ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(posi
 
 #annual abundance
 abund.annual$specialist <- factor(abund.annual$specialist, levels = c("high", "medium", "low"))
-ggplot(abund.annual[abund.annual$month != 1,], aes(x = year, y = abund, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
+abundplot <- ggplot(abund.annual[abund.annual$month != 1,], aes(x = year, y = abund, fill = specialist)) + geom_col(position = "stack", color = "white") + facet_grid(~LTER) +
   labs(x = "Year", y = "Abundance", fill = "Number of Habitats Used") + 
-  blank + scale_fill_discrete(name = "Number of Habitats Used", 
-                              breaks = c("low", "medium", "high"), 
-                              labels = c("Low", "Medium", "High"))
+  blank +  scale_fill_discrete(name = "Number of Habitats Used", 
+                               breaks = c("low", "medium", "high"), 
+                               labels = c("Low", "Medium", "High"))
+
+plot_grid(richplot, abundplot, nrow = 2, ncol = 1, labels = c("(a)", "(b)"), label_size = 10)
 
 #beta div
 betadiv_summ$time <- rep("Among year", times = 4)
-betadiv_summ1$time <- rep("Within year", times = 3)
-betadiv_all <- rbind(betadiv_summ, betadiv_summ1)
+beta.within.sum$time <- rep("Within year", times = 4)
+betadiv_all <- rbind(betadiv_summ, beta.within.sum)
 
 #Time series, among year
 arrange(betadiv.df, LTER, year)
@@ -356,21 +394,29 @@ ggplot(betadiv.df, aes(x = year, y = beta, color = LTER)) + geom_point() + geom_
 ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
   blank + labs(y = "Mean Bray-Curtis Index", color = "") 
 
-betadiv_sp_sum <- rbind(data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanHi, sd = betadiv_special$sdHi, cat = rep("High", times = 4)),
-                        data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanMed, sd = betadiv_special$sdMed, cat = rep("Medium", times = 4)),
-                        data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanLo, sd = betadiv_special$sdLo, cat = rep("Low", times = 4)))
-betadiv_sp_sum$cat <- factor(betadiv_sp_sum$cat, levels = c("High", "Medium", "Low"))
-amongplot <- ggplot(betadiv_sp_sum, aes(x = LTER, y = mean, color = cat)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
-  labs(y = "Mean Bray-Curtis Index", color = "Number of Habitats Used", x = "") + blank + ggtitle("Among Year") +
+betadiv_sp_sum <- rbind(data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanHi, sd = betadiv_special$sdHi, cat = rep("high", times = 4)),
+                        data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanMed, sd = betadiv_special$sdMed, cat = rep("medium", times = 4)),
+                        data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanLo, sd = betadiv_special$sdLo, cat = rep("low", times = 4)))
+betadiv_sp_sum$cat <- factor(betadiv_sp_sum$cat, levels = c("high", "medium", "low"))
+amongplot <- ggplot(betadiv_sp_sum, aes(x = LTER, y = mean, color = cat)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1, position = position_dodge(width = 0.5)) +
+  labs(y = "Mean Bray-Curtis Index", color = "Number of Habitats Used", x = "") +
+  ggtitle("Among Year") + blank + 
   theme(legend.position = c(0.05, 0.95), 
         legend.justification = c(0, 1),
-        plot.title = element_text(hjust = 0.5))
+        plot.title = element_text(hjust = 0.5)) + 
+  scale_color_discrete(name="No. of Habitats Used",
+                      breaks=c("high", "medium", "low"), 
+                      labels=c("High", "Medium", "Low")) +
+  ylim(-0.07,1)
 
-betadiv1_sp_sum <- rbind(data.frame(LTER = betadiv1_special$LTER, mean = betadiv1_special$meanHi, sd = betadiv1_special$sdHi, cat = rep("High", times = 3)),
-                         data.frame(LTER = betadiv1_special$LTER, mean = betadiv1_special$meanMed, sd = betadiv1_special$sdMed, cat = rep("Medium", times = 3)),
-                         data.frame(LTER = betadiv1_special$LTER, mean = betadiv1_special$meanLo, sd = betadiv1_special$sdLo, cat = rep("Low", times = 3)))
-betadiv1_sp_sum$cat <- factor(betadiv1_sp_sum$cat, levels = c("High", "Medium", "Low"))
-withinplot <- ggplot(betadiv1_sp_sum, aes(x = LTER, y = mean, color = cat)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
-  labs(y = "", x = "") + blank + ggtitle("Within Year") + theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) 
+beta.within.sp.sum$specialist <- factor(beta.within.sp.sum$specialist, levels = c("high", "medium", "low"))
+withinplot <- ggplot(beta.within.sp.sum, aes(x = LTER, y = mean, color = specialist)) +
+  geom_point(position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1, position = position_dodge(width = 0.5)) +
+  labs(y = "", x = "") + blank + ggtitle("Within Year") +
+  theme(legend.position = "none", plot.title = element_text(hjust = 0.5)) +
+  ylim(-0.07,1)
 
-grid.arrange(amongplot, withinplot, ncol = 2)
+plot_grid(amongplot, withinplot, align = "h", labels = c("(a)", "(b)"), label_size = 12)
