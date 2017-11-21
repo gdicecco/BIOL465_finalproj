@@ -477,8 +477,8 @@ spatial.within.sum <- spatial.within %>%
 blank <- theme_bw() + theme(panel.grid.major = element_blank(),
                             panel.grid.minor = element_blank())
 #species richness
-ggplot(richness[richness$month != 1,], aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
-  labs(x = "Year", y = "Species Richness") + blank
+ggplot(richness[richness$month == 5 | richness$month == 6 | richness$month == 9,], aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
+  labs(x = "Year", y = "Species Richness") + blank 
 
 #richness generalist/specialist
 annual.plot <- annualspecial[annualspecial$month != 1,]
