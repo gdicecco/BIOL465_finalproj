@@ -12,8 +12,8 @@ require(ggplot2)
 require(cowplot)
 
 ######### Read in datasets #########
-#setwd("/Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/") #Mac
-setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\") #Windows
+setwd("/Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/") #Mac
+#setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\") #Windows
 
 #For each dataset: change character strings to all lowercase and remove hyphens
 #improves matching rate by common name between LTER datasets and BirdLife checklist
@@ -319,7 +319,8 @@ beta.within.sp.sum <- beta.within.sp %>%
   group_by(LTER, specialist) %>%
   summarize(mean = mean(beta), sd = sd(beta))
             
-#### Jaccard
+#### Jaccard similarity (1 - J = dissimilarity)
+#among year
 sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
 betadivresults <- matrix(nrow = 63, ncol = 3)
 betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
@@ -348,9 +349,65 @@ jaccard.df <- betadiv.df[betadiv.df$beta != 0,] #remove years where there was mi
 missing.jaccard <- betadiv.df[betadiv.df$beta == 0,]
 jaccard_summ <- jaccard.df %>%
   group_by(LTER) %>%
+  summarize(mean = 1 - mean(beta), sd = sd(beta))
+
+#within year
+jac.within <- lter.df.subs %>%
+  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  group_by(LTER, year) %>%
+  summarize(total = length(unique(SISRecID)), shared = length(unique(SISRecID[unique(SISRecID[season == "S"]) %in% unique(SISRecID[season == "W"])]))) %>%
+  group_by(LTER, year) %>%
+  summarize(beta = shared/total)
+
+jac.within.sum <- jac.within %>%
+  group_by(LTER) %>%
+  summarize(mean = 1- mean(beta), sd = sd(beta))
+
+####Spatially explicit
+#B = 1 - mean(alpha)/gamma [gamma is total # of species all time points]
+#Among year
+sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
+betadivresults <- matrix(nrow = 63, ncol = 3)
+betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+
+for(k in 1:4) {
+  site <- sites[k]
+  df <- na.omit(lter.df) %>%
+    filter(LTER == site, month == 5 | month == 6 | month == 9)
+  betadiv <- matrix(nrow = 40, ncol = 3)
+  for(i in 1:(length(unique(df$year))-1)) {
+    year <- unique(df$year)[i]
+    gamma <- length(unique(df$SISRecID))
+    alpha <- length(unique(df$SISRecID[df$year == year]))
+    betadiv[i,1] <- site
+    betadiv[i,2] <- year
+    betadiv[i,3] <- 1 - alpha/gamma
+  }
+  print(length(na.omit(betadiv[,1])))
+  betadivresults[betadivresults[,1] == k, ] <- na.omit(betadiv)
+}
+spatial.df <- data.frame(site = betadivresults[,1],
+                         year = as.numeric(betadivresults[,2]),
+                          beta = as.numeric(betadivresults[,3]))
+spatial.sum <- spatial.df %>%
+  group_by(site) %>%
   summarize(mean = mean(beta), sd = sd(beta))
 
+#within year
+spatial.within <- lter.df.subs %>%
+  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  group_by(LTER, year) %>%
+  summarize(gamma = length(unique(SISRecID)), 
+            alpha = length(unique(SISRecID[season == "S"]))) %>%
+  group_by(LTER, year) %>%
+  summarize(beta = 1 - alpha/gamma)
+#alpha/gamma = 1 -> site is same as region, maximum similarity 
 
+spatial.within.sum <- spatial.within %>%
+  group_by(LTER) %>%
+  summarize(mean = mean(beta), sd = sd(beta))
+#does this need to be 1 -? Konza has really low beta diversity within year based on this
+#Luquillo has the highest
 
 ####### Plots #######
 blank <- theme_bw() + theme(panel.grid.major = element_blank(),
