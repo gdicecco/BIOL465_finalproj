@@ -10,10 +10,11 @@ require(tidyr)
 require(dplyr)
 require(ggplot2)
 require(cowplot)
+require(scales)
 
 ######### Read in datasets #########
-setwd("/Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/") #Mac
-#setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\") #Windows
+#setwd("/Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/") #Mac
+setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\") #Windows
 
 #For each dataset: change character strings to all lowercase and remove hyphens
 #improves matching rate by common name between LTER datasets and BirdLife checklist
@@ -322,8 +323,8 @@ beta.within.sp.sum <- beta.within.sp %>%
 #### Jaccard similarity (1 - J = dissimilarity)
 #among year
 sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
-betadivresults <- matrix(nrow = 63, ncol = 3)
-betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+jacresults <- matrix(nrow = 63, ncol = 3)
+jacresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
 
 for(k in 1:4) {
   site <- sites[k]
@@ -341,12 +342,12 @@ for(k in 1:4) {
     betadiv[i,3] <- length(shared)/length(total)
   }
   print(length(na.omit(betadiv[,1])))
-  betadivresults[betadivresults[,1] == k, ] <- na.omit(betadiv)
+  jacresults[jacresults[,1] == k, ] <- na.omit(betadiv)
   }
   
-jaccard.df <- data.frame(LTER = betadivresults[,1], year = as.numeric(betadivresults[,2]), beta = as.numeric(betadivresults[,3]))
-jaccard.df <- betadiv.df[betadiv.df$beta != 0,] #remove years where there was missing data in the following year
-missing.jaccard <- betadiv.df[betadiv.df$beta == 0,]
+jaccard.df <- data.frame(LTER = jacresults[,1], year = as.numeric(jacresults[,2]), beta = as.numeric(jacresults[,3]))
+jaccard.df <- jaccard.df[jaccard.df$beta != 0,] #remove years where there was missing data in the following year
+missing.jaccard <- jaccard.df[jaccard.df$beta == 0,]
 jaccard_summ <- jaccard.df %>%
   group_by(LTER) %>%
   summarize(mean = 1 - mean(beta), sd = sd(beta))
@@ -363,32 +364,99 @@ jac.within.sum <- jac.within %>%
   group_by(LTER) %>%
   summarize(mean = 1- mean(beta), sd = sd(beta))
 
-####Spatially explicit
-#B = 1 - mean(alpha)/gamma [gamma is total # of species all time points]
-#Among year
+#among year specialists ###### This doesn't seem like it works correctly
 sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
-betadivresults <- matrix(nrow = 63, ncol = 3)
-betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+jacresults1 <- matrix(nrow = 63, ncol = 5)
+jacresults1[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
 
 for(k in 1:4) {
   site <- sites[k]
   df <- na.omit(lter.df) %>%
     filter(LTER == site, month == 5 | month == 6 | month == 9)
-  betadiv <- matrix(nrow = 40, ncol = 3)
+  betadiv <- matrix(nrow = 40, ncol = 5)
+  for(i in 1:(length(unique(df$year))-1)) {
+    year <- unique(df$year)[i]
+    total <- unique(df$SISRecID[df$year == year+1 | df$year == year])
+    yr.hi <- unique(df$SISRecID[df$year == year & df$specialist == "high"])
+    yr1.hi <- unique(df$SISRecID[df$year == year + 1 & df$specialist == "high"])
+    shared.hi <- yr.hi[yr.hi %in% yr1.hi]
+    yr.med <- unique(df$SISRecID[df$year == year & df$specialist == "medium"])
+    yr1.med <- unique(df$SISRecID[df$year == year + 1 & df$specialist == "medium"])
+    shared.med <- yr.med[yr.med %in% yr1.med]
+    yr.lo <- unique(df$SISRecID[df$year == year & df$specialist == "low"])
+    yr1.lo <- unique(df$SISRecID[df$year == year + 1 & df$specialist == "low"])
+    shared.lo <- yr.lo[yr.lo %in% yr1.lo]
+    betadiv[i,1] <- site
+    betadiv[i,2] <- year
+    betadiv[i,3] <- length(shared.hi)/length(total)
+    betadiv[i,4] <- length(shared.med)/length(total)
+    betadiv[i,5] <- length(shared.lo)/length(total)
+  }
+  print(length(na.omit(betadiv[,1])))
+  jacresults1[jacresults1[,1] == k, ] <- na.omit(betadiv)
+}
+
+jaccard.sp.df <- data.frame(LTER = jacresults1[,1], 
+                         year = as.numeric(jacresults1[,2]), 
+                         beta.hi = as.numeric(jacresults1[,3]),
+                         beta.med = as.numeric(jacresults1[,4]),
+                         beta.lo = as.numeric(jacresults1[,5]))
+jaccard.sp.df <- jaccard.sp.df[jaccard.sp.df$beta.hi != 0 | jaccard.sp.df$beta.med != 0 | jaccard.sp.df$beta.lo != 0,] #remove years where there was missing data in the following year
+missing.jaccard <- betadiv.df[betadiv.df$beta == 0,]
+jaccard.spp_summ <- jaccard.sp.df %>%
+  group_by(LTER) %>%
+  summarize(mean.hi = 1 - mean(beta.hi), sd.hi = sd(beta.hi),
+            mean.med = 1 - mean(beta.med), sd.med = sd(beta.med),
+            mean.lo = 1 - mean(beta.lo), sd.lo = sd(beta.lo))
+
+#within year specialists
+within.total <- lter.df.subs %>%
+  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  group_by(LTER, year) %>%
+  summarize(total = length(unique(SISRecID)))
+
+jac.sp.within <- lter.df.subs %>%
+  left_join(within.total, by = c("LTER", "year")) %>%
+  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  group_by(LTER, year, specialist) %>%
+  summarize(shared = length(unique(SISRecID[unique(SISRecID[season == "S"]) %in% unique(SISRecID[season == "W"])])), 
+            beta = shared/mean(total))
+
+jac.sp.within.sum <- jac.sp.within %>%
+  group_by(LTER, specialist) %>%
+  summarize(mean = 1- mean(beta), sd = sd(beta))
+
+####Spatially explicit
+#B = 1 - mean(alpha)/gamma [gamma is total # of species all time points]
+#Among year
+sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
+spacialresults <- matrix(nrow = 63, ncol = 5)
+spacialresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+
+for(k in 1:4) {
+  site <- sites[k]
+  df <- na.omit(lter.df) %>%
+    filter(LTER == site, month == 5 | month == 6 | month == 9)
+  betadiv <- matrix(nrow = 40, ncol = 5)
   for(i in 1:(length(unique(df$year))-1)) {
     year <- unique(df$year)[i]
     gamma <- length(unique(df$SISRecID))
     alpha <- length(unique(df$SISRecID[df$year == year]))
     betadiv[i,1] <- site
     betadiv[i,2] <- year
-    betadiv[i,3] <- 1 - alpha/gamma
+    betadiv[i,3] <- gamma
+    betadiv[i,4] <- alpha
+    betadiv[i,5] <- 1 - alpha/gamma
   }
   print(length(na.omit(betadiv[,1])))
-  betadivresults[betadivresults[,1] == k, ] <- na.omit(betadiv)
+  spacialresults[spacialresults[,1] == k, ] <- na.omit(betadiv)
 }
-spatial.df <- data.frame(site = betadivresults[,1],
-                         year = as.numeric(betadivresults[,2]),
-                          beta = as.numeric(betadivresults[,3]))
+spatial.df <- data.frame(site = spacialresults[,1],
+                         year = as.numeric(spacialresults[,2]),
+                          gamma = as.numeric(spacialresults[,3]),
+                         alpha = as.numeric(spacialresults[,4]),
+                         beta = as.numeric(spacialresults[,5]))
+
 spatial.sum <- spatial.df %>%
   group_by(site) %>%
   summarize(mean = mean(beta), sd = sd(beta))
@@ -398,16 +466,12 @@ spatial.within <- lter.df.subs %>%
   mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
   group_by(LTER, year) %>%
   summarize(gamma = length(unique(SISRecID)), 
-            alpha = length(unique(SISRecID[season == "S"]))) %>%
-  group_by(LTER, year) %>%
-  summarize(beta = 1 - alpha/gamma)
-#alpha/gamma = 1 -> site is same as region, maximum similarity 
+            alpha = length(unique(SISRecID[season == "W"])), 
+            beta = 1 - alpha/gamma)
 
 spatial.within.sum <- spatial.within %>%
   group_by(LTER) %>%
   summarize(mean = mean(beta), sd = sd(beta))
-#does this need to be 1 -? Konza has really low beta diversity within year based on this
-#Luquillo has the highest
 
 ####### Plots #######
 blank <- theme_bw() + theme(panel.grid.major = element_blank(),
@@ -419,7 +483,7 @@ ggplot(richness[richness$month != 1,], aes(x = year, y = richness, color = LTER)
 #richness generalist/specialist
 annual.plot <- annualspecial[annualspecial$month != 1,]
 annual.plot$specialist <- factor(annual.plot$specialist, levels = c("high", "medium", "low"))
-richplot <- ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack", color = "white") + facet_grid(~LTER) +
+richplot <- ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
   labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + 
   blank + scale_fill_discrete(name = "Number of Habitats Used", 
                               breaks = c("low", "medium", "high"), 
@@ -427,8 +491,9 @@ richplot <- ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + g
 
 #annual abundance
 abund.annual$specialist <- factor(abund.annual$specialist, levels = c("high", "medium", "low"))
-abundplot <- ggplot(abund.annual[abund.annual$month != 1,], aes(x = year, y = abund, fill = specialist)) + geom_col(position = "stack", color = "white") + facet_grid(~LTER) +
-  labs(x = "Year", y = "Abundance", fill = "Number of Habitats Used") + 
+abundplot <- ggplot(abund.annual[abund.annual$month != 1 & abund.annual$month != 11 & abund.annual$month != 3
+                                 & abund.annual$month != 2,], aes(x = year, y = log10(abund), fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
+  labs(x = "Year", y = "Log(Abundance)", fill = "Number of Habitats Used") + 
   blank +  scale_fill_discrete(name = "Number of Habitats Used", 
                                breaks = c("low", "medium", "high"), 
                                labels = c("Low", "Medium", "High"))
@@ -438,19 +503,27 @@ plot_grid(richplot, abundplot, nrow = 2, ncol = 1, labels = c("(a)", "(b)"), lab
 #beta div
 betadiv_summ$time <- rep("Among year", times = 4)
 beta.within.sum$time <- rep("Within year", times = 4)
-betadiv_all <- rbind(betadiv_summ, beta.within.sum)
+betadiv_summ$stat <- rep("Bray-Curtis", times = 4)
+beta.within.sum$stat <- rep("Bray-Curtis", times = 4)
+jaccard_summ$time <- rep("Among year", times = 4)
+jaccard_summ$stat <- rep("Jaccard", times = 4)
+jac.within.sum$time <- rep("Within year", times = 4)
+jac.within.sum$stat <- rep("Jaccard", times = 4)
+spatial.sum$time <- rep("Among year", times = 4)
+spatial.sum$stat <- rep("Kraft et al.", times = 4)
+spatial.within.sum$time <- rep("Within year", times = 4)
+spatial.within.sum$stat <- rep("Kraft et al.", times = 4)
+colnames(spatial.sum)[1] <- "LTER"
+colnames(spatial.within.sum)[1] <- "LTER"
+betadiv_all <- rbind(betadiv_summ, beta.within.sum, 
+                     jaccard_summ, jac.within.sum, 
+                     spatial.sum, spatial.within.sum)
 
-#Time series, among year
-arrange(betadiv.df, LTER, year)
-ggplot(betadiv.df, aes(x = year, y = beta, color = LTER)) + geom_point() + geom_line() +
-  blank + labs(x = "Year", y = "Bray-Curtis Index") + ggtitle("Among year beta diversity") +
-  theme(legend.position = c(0.8, 0.95), 
-              legend.justification = c(0, 1),
-        plot.title = element_text(hjust = 0.5))
-
+#Among vs within year, all site
 ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
-  blank + labs(y = "Mean Bray-Curtis Index", color = "") 
+  blank + labs(y = "Mean Dissimilarity", color = "")+ facet_wrap(~stat)
 
+#Bray curtis, specialists
 betadiv_sp_sum <- rbind(data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanHi, sd = betadiv_special$sdHi, cat = rep("high", times = 4)),
                         data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanMed, sd = betadiv_special$sdMed, cat = rep("medium", times = 4)),
                         data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanLo, sd = betadiv_special$sdLo, cat = rep("low", times = 4)))
