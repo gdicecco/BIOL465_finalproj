@@ -314,11 +314,16 @@ beta.within.sp <- lter.df.subs %>%
   summarize(xj = sum(count[season == "S"]), xk = sum(count[season == "W"]))%>%
   left_join(beta.within, by = c("LTER", "year")) %>%
   group_by(LTER, year, specialist) %>%
-  summarize(beta = sum(abs(xj - xk))/mean(denom)) #did not test this yet 11/15 5:26 PM
+  summarize(beta = sum(abs(xj - xk))/mean(denom))
 
 beta.within.sp.sum <- beta.within.sp %>%
   group_by(LTER, specialist) %>%
   summarize(mean = mean(beta), sd = sd(beta))
+
+####Bootstrap BC Index by %specialists
+#need randomized data frame, for loop to calculate values from code above 1000 times 
+#get mean/sd of distribution for among and within year
+#????
             
 #### Jaccard similarity (1 - J = dissimilarity)
 #among year
@@ -426,7 +431,7 @@ jac.sp.within.sum <- jac.sp.within %>%
   group_by(LTER, specialist) %>%
   summarize(mean = 1- mean(beta), sd = sd(beta))
 
-####Spatially explicit
+####Diversity corrected Jaccard
 #B = 1 - mean(alpha)/gamma [gamma is total # of species all time points]
 #Among year
 sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
@@ -476,12 +481,22 @@ spatial.within.sum <- spatial.within %>%
 ####### Plots #######
 blank <- theme_bw() + theme(panel.grid.major = element_blank(),
                             panel.grid.minor = element_blank())
-#species richness
-ggplot(richness[richness$month == 5 | richness$month == 6 | richness$month == 9,], aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
-  labs(x = "Year", y = "Species Richness") + blank 
+setwd("C:/Users/gdicecco/Desktop/git/BIOL465_finalproj/")
 
+#Fig. 1
+#species richness
+richness.plotdf <- richness[richness$month == 5 | richness$month == 6 | richness$month == 9,]
+richness.mu <- richness.plotdf %>%
+  group_by(LTER) %>%
+  summarize(mean = mean(richness)) %>%
+  left_join(richness.plotdf, by = "LTER")
+ggplot(richness.mu, aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
+  labs(x = "Year", y = "Species Richness") + blank + geom_line(aes(x = year, y = mean, color = LTER), lty = 2)
+
+#Fig. 2
 #richness generalist/specialist
-annual.plot <- annualspecial[annualspecial$month != 1,]
+annual.plot <- annualspecial[annualspecial$month != 1 & annualspecial$month != 11 & annualspecial$month != 3
+                             & annualspecial$month != 2, ]
 annual.plot$specialist <- factor(annual.plot$specialist, levels = c("high", "medium", "low"))
 richplot <- ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
   labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + 
@@ -500,6 +515,8 @@ abundplot <- ggplot(abund.annual[abund.annual$month != 1 & abund.annual$month !=
 
 plot_grid(richplot, abundplot, nrow = 2, ncol = 1, labels = c("(a)", "(b)"), label_size = 10)
 
+#Fig. 3
+#Make this regression based on seasonality instead of categorical?
 #beta div
 betadiv_summ$time <- rep("Among year", times = 4)
 beta.within.sum$time <- rep("Within year", times = 4)
@@ -510,9 +527,9 @@ jaccard_summ$stat <- rep("Jaccard", times = 4)
 jac.within.sum$time <- rep("Within year", times = 4)
 jac.within.sum$stat <- rep("Jaccard", times = 4)
 spatial.sum$time <- rep("Among year", times = 4)
-spatial.sum$stat <- rep("Kraft et al.", times = 4)
+spatial.sum$stat <- rep("Diversity Corrected Jaccard", times = 4)
 spatial.within.sum$time <- rep("Within year", times = 4)
-spatial.within.sum$stat <- rep("Kraft et al.", times = 4)
+spatial.within.sum$stat <- rep("Diversity Corrected Jaccard", times = 4)
 colnames(spatial.sum)[1] <- "LTER"
 colnames(spatial.within.sum)[1] <- "LTER"
 betadiv_all <- rbind(betadiv_summ, beta.within.sum, 
@@ -523,6 +540,8 @@ betadiv_all <- rbind(betadiv_summ, beta.within.sum,
 ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
   blank + labs(y = "Mean Dissimilarity", color = "")+ facet_wrap(~stat)
 
+#Fig. 4
+#Add null expectations
 #Bray curtis, specialists
 betadiv_sp_sum <- rbind(data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanHi, sd = betadiv_special$sdHi, cat = rep("high", times = 4)),
                         data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanMed, sd = betadiv_special$sdMed, cat = rep("medium", times = 4)),
