@@ -27,20 +27,29 @@ checklist.subs$Common_name <- iconv(checklist.subs$Common_name,"WINDOWS-1252","U
 checklist.subs$Common_name <- tolower(checklist.subs$Common_name)
 checklist.subs$Common_name <- gsub("-", " ", checklist.subs$Common_name)
 
+##Migration trait data (only passerines in BBS)
+traits <- read.csv("Master_RO_Correlates_20110610.csv", header = T, stringsAsFactors = F)
+traits.subs <- traits[,c("CommonName", "migclass")]
+traits.subs$CommonName <- tolower(traits.subs$CommonName)
+traits.subs$CommonName <- gsub("-", " ", traits.subs$CommonName)
+
 #Konza LTER
 konza <- read.csv("CBP011_0.csv")
 konza$COMMONNAME <- tolower(konza$COMMONNAME)
 konza$COMMONNAME <- gsub("-", " ", konza$COMMONNAME)
 konza.sub <- filter(konza, WATERSHED == "020B" | WATERSHED == "020C" | WATERSHED == "020D" | WATERSHED == "N20B") #unburned grassland
-konza_id <- left_join(konza.sub, checklist.subs, by = c("COMMONNAME" = "Common_name"))
+konza_id <- konza.sub %>%
+  left_join(checklist.subs, by = c("COMMONNAME" = "Common_name")) %>%
+  left_join(traits.subs, by = c("COMMONNAME" = "CommonName"))
 
-#Park River NWR LTER
+#Parker River NWR LTER
 parkriver <- read.csv("MON-EX-PRNWR-Volunteer-Birds.csv", header = TRUE)
 parkriver$Common.Name <- tolower(parkriver$Common.Name)
 parkriver$Common.Name <- gsub("-", " ", parkriver$Common.Name)
-parkriver.sub <- parkriver %>%
-  filter(Census.Unit == "marsh") #subset one habitat type
-parkriver_id <- left_join(parkriver.sub, checklist.subs, by = c("Common.Name" = "Common_name"))
+parkriver_id <- parkriver %>%
+  filter(Census.Unit == "marsh") %>% #subset one habitat type
+  left_join(checklist.subs, by = c("Common.Name" = "Common_name")) %>%
+  left_join(traits.subs, by = c("Common.Name" = "CommonName"))
 
 #Sevilleta LTER
 sev <- read.table("sev017_birdpop_09251997_0.txt", header = T, sep = ",")
@@ -51,7 +60,8 @@ sev_join <- left_join(sev, sev_table_col, by = c("species_number" = "AOU")) #joi
 sev_join$CommonName <- tolower(sev_join$CommonName)
 sev_join$CommonName <- gsub("-", " ", sev_join$CommonName)
 sev_id <- filter(sev_join, habitat_type == "creosote") %>% #subset one habitat type
-          left_join(checklist.subs, by = c("CommonName" = "Common_name")) #join ID number by common name
+          left_join(checklist.subs, by = c("CommonName" = "Common_name")) %>% #join ID number by common name
+          left_join(traits.subs, by = c("CommonName" = "CommonName"))
 
 #Luquillo LTER
 luquillo_LT_25 <- read.csv("ALL_ElVerde_LT_25m.csv", header = TRUE)
@@ -66,7 +76,9 @@ luquillo_long <- gather(luquillo, Species, Abundance, 11:53)
 luquillo_commonnames <- left_join(na.omit(luquillo_long), luquillo_sppnames, by = c("Species" = "Code")) #add common names
 luquillo_commonnames$CommonName <- tolower(luquillo_commonnames$CommonName)
 luquillo_commonnames$CommonName <- gsub("-", " ", luquillo_commonnames$CommonName)
-luquillo_id <- left_join(luquillo_commonnames, checklist.subs, by = c("CommonName" = "Common_name"))
+luquillo_id <- luquillo_commonnames %>%
+  left_join(checklist.subs, by = c("CommonName" = "Common_name")) %>%
+  left_join(traits.subs, by = c("CommonName" = "CommonName"))
 
 ###Check that all species were paired with an ID from checklist
 spp_parkriver <- unique(parkriver_id[,c(6,9)]) #102 spp
@@ -99,12 +111,12 @@ luquillo_id$date <- as.Date(luquillo_id$DATE, format = "%m/%d/%Y")
 luquillo_id$month <- as.numeric(format(luquillo_id$date, format = "%m"))
 
 #Subset relevant months to have even sampling effort across the year
-#Sevilleta: #January, May, September, December
-#Park River : Every two months, use January, April, June, October
+#Sevilleta: #January/December, May/June
+#Parker River : Every two months, use January, April, June, October
 #Konza: January, April, June, October
 #Luquillo: wet season May, dry season late Nov through late April if use months 11, 1, 2, 3 - 1990-1995
 sev_id <- sev_id %>%
-  filter(month == 1 | month == 9)
+  filter(month == 1 | month == 12 | month == 5 | month == 6)
 parkriver_id <- parkriver_id %>%
   filter(month == 1 | month == 6)
 konza_id <- konza_id %>%
@@ -114,10 +126,10 @@ luquillo_id <- luquillo_id %>%
 
 #add counts for spp in sev and konza
 sev_id_count <- sev_id %>%
-  group_by(year, month, day, habitat_type, stake_number, CommonName, SISRecID) %>%
+  group_by(year, month, day, habitat_type, stake_number, migclass, CommonName, SISRecID) %>%
   summarize(Count = n())
 konza_id_count <- konza_id %>%
-  group_by(RECYEAR, RECMONTH, RECDAY, WATERSHED, COMMONNAME, SISRecID) %>%
+  group_by(RECYEAR, RECMONTH, RECDAY, WATERSHED, migclass, COMMONNAME, SISRecID) %>%
   summarize(Count = n())
 
 ######### Calculate metrics of interest #########
@@ -146,7 +158,7 @@ luquillo_id_habitats <- left_join(luquillo_id, num_habitats, by = "SISRecID")
 
 #Merge relevant data into one dataframe for all four sites
 sev_id_habitats$site <- rep("Sevilleta", times = length(sev_id_habitats$year))
-parkriver_id_habitats$site <- rep("Park River", times = length(parkriver_id_habitats$year))
+parkriver_id_habitats$site <- rep("Parker River", times = length(parkriver_id_habitats$year))
 luquillo_id_habitats$site <- rep("Luquillo", times = length(luquillo_id_habitats$YEAR))
 konza_id_habitats$site <- rep("Konza", times = length(konza_id_habitats$RECYEAR))
 
@@ -156,7 +168,8 @@ lter.df <- data.frame(LTER = c(sev_id_habitats$site, parkriver_id_habitats$site,
                       common_name = c(sev_id_habitats$CommonName,parkriver_id_habitats$Common.Name, luquillo_id_habitats$CommonName,konza_id_habitats$COMMONNAME),
                       count = c(sev_id_habitats$Count,parkriver_id_habitats$Count, luquillo_id_habitats$Abundance,konza_id_habitats$Count),
                       SISRecID = c(sev_id_habitats$SISRecID,parkriver_id_habitats$SISRecID, luquillo_id_habitats$SISRecID,konza_id_habitats$SISRecID),
-                      number_habitats = c(sev_id_habitats$Number_habitats,parkriver_id_habitats$Number_habitats, luquillo_id_habitats$Number_habitats,konza_id_habitats$Number_habitats))
+                      number_habitats = c(sev_id_habitats$Number_habitats,parkriver_id_habitats$Number_habitats, luquillo_id_habitats$Number_habitats,konza_id_habitats$Number_habitats),
+                      migclass = c(sev_id_habitats$migclass, parkriver_id_habitats$migclass, luquillo_id_habitats$migclass, konza_id_habitats$migclass))
 
 ####Annual species richness over time
 richness <- lter.df %>%
@@ -194,15 +207,14 @@ abund.annual <- lter.df %>%
   
 ####Among year BC Index 
 ##rainy/summer only
-#can this be cleaned up with pipes?
-sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
-betadivresults <- matrix(nrow = 63, ncol = 3)
-betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+sites <- c("Konza", "Sevilleta", "Parker River", "Luquillo")
+betadivresults <- matrix(nrow = 65, ncol = 3)
+betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 6), rep(3, times = 8), rep(4, times = 23))
 
 for(k in 1:4) {
   site <- sites[k]
     df <- na.omit(lter.df) %>%
-    filter(LTER == site, month == 5 | month == 6 | month == 9)
+    filter(LTER == site, month == 5 | month == 6)
     betadiv <- matrix(nrow = 40, ncol = 3)
     for(i in 1:(length(unique(df$year))-1)) {
       year <- unique(df$year)[i]
@@ -233,14 +245,14 @@ betadiv_summ <- betadiv.df %>%
   summarize(mean = mean(beta), sd = sd(beta))
 
 ####Among year BC Index by %specialists
-sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
-betadivresults <- matrix(nrow = 63, ncol = 5)
-betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+sites <- c("Konza", "Sevilleta", "Parker River", "Luquillo")
+betadivresults <- matrix(nrow = 65, ncol = 5)
+betadivresults[,1] <- c(rep(1, times = 28), rep(2, times = 6), rep(3, times = 8), rep(4, times = 23))
 
 for(k in 1:4) {
   site <- sites[k]
   df <- na.omit(lter.df) %>%
-    filter(LTER == site, month == 5 | month == 6 | month == 9)
+    filter(LTER == site, month == 5 | month == 6)
   betadiv <- matrix(nrow = 40, ncol = 5)
   for(i in 1:(length(unique(df$year))-1)) {
     year <- unique(df$year)[i]
@@ -290,14 +302,14 @@ betadiv_special <- betadiv.special.df %>%
 ##between winter and summer, all except luquillo (compare wet and dry season)
 lter.df.subs <- lter.df %>%
   arrange(LTER, year, month) %>%
-  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>% #create season code
+  mutate(season = ifelse(month == 6 | month == 5, "S", "W")) %>% #create season code
   group_by(LTER, year) %>%
   summarize(total = length(unique(season))) %>%
   filter(total == 2) %>%
   left_join(lter.df, by = c("LTER", "year"))
   
 beta.within <- lter.df.subs %>%
-  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  mutate(season = ifelse(month == 6 | month == 5, "S", "W")) %>%
   group_by(LTER, year, common_name) %>%
   summarize(xj = sum(count[season == "S"]), xk = sum(count[season == "W"])) %>%
   group_by(LTER, year) %>%
@@ -309,7 +321,7 @@ beta.within.sum <- beta.within %>%
 
 ####Within year BC Index by %specialists
 beta.within.sp <- lter.df.subs %>%
-  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  mutate(season = ifelse(month == 6 | month == 5, "S", "W")) %>%
   group_by(LTER, year, specialist, common_name) %>%
   summarize(xj = sum(count[season == "S"]), xk = sum(count[season == "W"]))%>%
   left_join(beta.within, by = c("LTER", "year")) %>%
@@ -319,22 +331,17 @@ beta.within.sp <- lter.df.subs %>%
 beta.within.sp.sum <- beta.within.sp %>%
   group_by(LTER, specialist) %>%
   summarize(mean = mean(beta), sd = sd(beta))
-
-####Bootstrap BC Index by %specialists
-#need randomized data frame, for loop to calculate values from code above 1000 times 
-#get mean/sd of distribution for among and within year
-#????
             
 #### Jaccard similarity (1 - J = dissimilarity)
 #among year
-sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
-jacresults <- matrix(nrow = 63, ncol = 3)
-jacresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+sites <- c("Konza", "Sevilleta", "Parker River", "Luquillo")
+jacresults <- matrix(nrow = 65, ncol = 3)
+jacresults[,1] <- c(rep(1, times = 28), rep(2, times = 6), rep(3, times = 8), rep(4, times = 23))
 
 for(k in 1:4) {
   site <- sites[k]
   df <- na.omit(lter.df) %>%
-    filter(LTER == site, month == 5 | month == 6 | month == 9)
+    filter(LTER == site, month == 5 | month == 6)
   betadiv <- matrix(nrow = 40, ncol = 3)
   for(i in 1:(length(unique(df$year))-1)) {
     year <- unique(df$year)[i]
@@ -359,7 +366,7 @@ jaccard_summ <- jaccard.df %>%
 
 #within year
 jac.within <- lter.df.subs %>%
-  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  mutate(season = ifelse(month == 6 | month == 5, "S", "W")) %>%
   group_by(LTER, year) %>%
   summarize(total = length(unique(SISRecID)), shared = length(unique(SISRecID[unique(SISRecID[season == "S"]) %in% unique(SISRecID[season == "W"])]))) %>%
   group_by(LTER, year) %>%
@@ -370,14 +377,14 @@ jac.within.sum <- jac.within %>%
   summarize(mean = 1- mean(beta), sd = sd(beta))
 
 #among year specialists ###### This doesn't seem like it works correctly
-sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
-jacresults1 <- matrix(nrow = 63, ncol = 5)
-jacresults1[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+sites <- c("Konza", "Sevilleta", "Parker River", "Luquillo")
+jacresults1 <- matrix(nrow = 65, ncol = 5)
+jacresults1[,1] <- c(rep(1, times = 28), rep(2, times = 6), rep(3, times = 8), rep(4, times = 23))
 
 for(k in 1:4) {
   site <- sites[k]
   df <- na.omit(lter.df) %>%
-    filter(LTER == site, month == 5 | month == 6 | month == 9)
+    filter(LTER == site, month == 5 | month == 6)
   betadiv <- matrix(nrow = 40, ncol = 5)
   for(i in 1:(length(unique(df$year))-1)) {
     year <- unique(df$year)[i]
@@ -416,13 +423,13 @@ jaccard.spp_summ <- jaccard.sp.df %>%
 
 #within year specialists
 within.total <- lter.df.subs %>%
-  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  mutate(season = ifelse(month == 6 | month == 5, "S", "W")) %>%
   group_by(LTER, year) %>%
   summarize(total = length(unique(SISRecID)))
 
 jac.sp.within <- lter.df.subs %>%
   left_join(within.total, by = c("LTER", "year")) %>%
-  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  mutate(season = ifelse(month == 6 | month == 5, "S", "W")) %>%
   group_by(LTER, year, specialist) %>%
   summarize(shared = length(unique(SISRecID[unique(SISRecID[season == "S"]) %in% unique(SISRecID[season == "W"])])), 
             beta = shared/mean(total))
@@ -434,14 +441,14 @@ jac.sp.within.sum <- jac.sp.within %>%
 ####Diversity corrected Jaccard
 #B = 1 - mean(alpha)/gamma [gamma is total # of species all time points]
 #Among year
-sites <- c("Konza", "Sevilleta", "Park River", "Luquillo")
-spacialresults <- matrix(nrow = 63, ncol = 5)
-spacialresults[,1] <- c(rep(1, times = 28), rep(2, times = 4), rep(3, times = 8), rep(4, times = 23))
+sites <- c("Konza", "Sevilleta", "Parker River", "Luquillo")
+spacialresults <- matrix(nrow = 65, ncol = 5)
+spacialresults[,1] <- c(rep(1, times = 28), rep(2, times = 6), rep(3, times = 8), rep(4, times = 23))
 
 for(k in 1:4) {
   site <- sites[k]
   df <- na.omit(lter.df) %>%
-    filter(LTER == site, month == 5 | month == 6 | month == 9)
+    filter(LTER == site, month == 5 | month == 6)
   betadiv <- matrix(nrow = 40, ncol = 5)
   for(i in 1:(length(unique(df$year))-1)) {
     year <- unique(df$year)[i]
@@ -468,7 +475,7 @@ spatial.sum <- spatial.df %>%
 
 #within year
 spatial.within <- lter.df.subs %>%
-  mutate(season = ifelse(month == 6 | month == 5 | month == 9, "S", "W")) %>%
+  mutate(season = ifelse(month == 6 | month == 5, "S", "W")) %>%
   group_by(LTER, year) %>%
   summarize(gamma = length(unique(SISRecID)), 
             alpha = length(unique(SISRecID[season == "W"])), 
@@ -479,13 +486,24 @@ spatial.within.sum <- spatial.within %>%
   summarize(mean = mean(beta), sd = sd(beta))
 
 ####### Plots #######
+#trait contingency table
+sppunique <- data.frame(common_name = unique(lter.df$common_name))
+lter.df$specialist <- as.factor(lter.df$specialist)
+lter.traits <- lter.df[,c(4,8:9)]
+join.spp <- left_join(sppunique, lter.traits, by = "common_name") %>%
+  left_join(traits.subs, by = c("common_name" = "CommonName")) %>%
+  distinct()
+
+table(join.spp$specialist, join.spp$migclass.x) #80/179 species covered in this (Passerines)
+chisq.test(join.spp$specialist, join.spp$migclass.x) #p = 0.35, independent
+
 blank <- theme_bw() + theme(panel.grid.major = element_blank(),
                             panel.grid.minor = element_blank())
 setwd("C:/Users/gdicecco/Desktop/git/BIOL465_finalproj/")
 
 #Fig. 1
 #species richness
-richness.plotdf <- richness[richness$month == 5 | richness$month == 6 | richness$month == 9,]
+richness.plotdf <- richness[richness$month == 5 | richness$month == 6 ,]
 richness.mu <- richness.plotdf %>%
   group_by(LTER) %>%
   summarize(mean = mean(richness)) %>%
@@ -496,7 +514,7 @@ ggplot(richness.mu, aes(x = year, y = richness, color = LTER)) + geom_point() + 
 #Fig. 2
 #richness generalist/specialist
 annual.plot <- annualspecial[annualspecial$month != 1 & annualspecial$month != 11 & annualspecial$month != 3
-                             & annualspecial$month != 2, ]
+                             & annualspecial$month != 2 & annualspecial$month != 12, ]
 annual.plot$specialist <- factor(annual.plot$specialist, levels = c("high", "medium", "low"))
 richplot <- ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
   labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + 
@@ -532,13 +550,21 @@ spatial.within.sum$time <- rep("Within year", times = 4)
 spatial.within.sum$stat <- rep("Diversity Corrected Jaccard", times = 4)
 colnames(spatial.sum)[1] <- "LTER"
 colnames(spatial.within.sum)[1] <- "LTER"
+
+lats <- data.frame(LTER = sites, lat = c(39.09, 34.35, 42.76, 18.30))
+#from https://lternet.edu/sites/coordinates
 betadiv_all <- rbind(betadiv_summ, beta.within.sum, 
                      jaccard_summ, jac.within.sum, 
-                     spatial.sum, spatial.within.sum)
+                     spatial.sum, spatial.within.sum) %>%
+  left_join(lats, by = "LTER")
+
+amongmod <- lm(mean ~ lat, data = betadiv_all)
 
 #Among vs within year, all site
-ggplot(betadiv_all, aes(x = LTER, y = mean, color = time)) + geom_point() + geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), width = 0.1) +
-  blank + labs(y = "Mean Dissimilarity", color = "")+ facet_wrap(~stat)
+ggplot(betadiv_all, aes(x = lat, y = mean, color = time)) + geom_point(cex = 2) + 
+  geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.5, width = 1) +
+  blank + labs(y = "Mean Dissimilarity", color = "", x = "Latitude")+ geom_smooth(method = "lm", se = F, lty = 2) +
+  facet_wrap(~stat)
 
 #Fig. 4
 #Add null expectations
