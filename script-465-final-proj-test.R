@@ -569,11 +569,13 @@ annual.plot <- annualspecial[annualspecial$month != 1 & annualspecial$month != 1
                              & annualspecial$month != 2 & annualspecial$month != 12, ]
 annual.plot$specialist <- factor(annual.plot$specialist, levels = c("high", "medium", "low"))
 richplot <- ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
-  labs(x = "Year", y = "Species Richness", fill = "Number of Habitats Used") + 
+  labs(x = "", y = "Species Richness", fill = "Number of Habitats Used") + 
   theme_classic() + scale_fill_discrete(name = "Number of Habitats Used", 
                               breaks = c("low", "medium", "high"), 
                               labels = c("Low", "Medium", "High")) +
-  theme(strip.background = element_blank())
+  theme(strip.background = element_blank(),
+        strip.text.x = element_text(face = "bold"))
+richplota <- richplot + theme(legend.position = "none")
 
 #annual abundance
 abund.annual$specialist <- factor(abund.annual$specialist, levels = c("high", "medium", "low"))
@@ -584,9 +586,12 @@ abundplot <- ggplot(abund.annual[abund.annual$month != 1 & abund.annual$month !=
                                breaks = c("low", "medium", "high"), 
                                labels = c("Low", "Medium", "High")) +
   theme(strip.background = element_blank(),
-        strip.text.x = element_blank())
+        strip.text.x = element_blank(),
+        legend.position = "none")
 
-plot_grid(richplot, abundplot, nrow = 2, ncol = 1, labels = c("(a)", "(b)"), label_size = 10)
+legend <- get_legend(richplot)
+first_col <- plot_grid(richplota, abundplot, ncol = 1, labels = c("(a)", "(b)"), label_size = 10)
+plot_grid(first_col, legend, ncol = 2, rel_widths = c(1, 0.25))
 
 #Fig. 3
 #beta div
@@ -618,7 +623,7 @@ amongmod <- lm(mean ~ lat, data = betadiv_all)
 ggplot(betadiv_all, aes(x = lat, y = mean, color = time)) + geom_point(cex = 2) + 
   geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.5, width = 1) +
   theme_classic() + labs(y = "Mean Dissimilarity", color = "", x = "Latitude")+ geom_smooth(method = "lm", se = F, lty = 2) +
-  facet_wrap(~stat)
+  facet_wrap(~stat) + theme(strip.background = element_blank())
 
 #Fig. 4
 #Within and Among year by trait group for each LTER & beta diversity metric
@@ -740,20 +745,22 @@ traits.all <- bind_rows(betadiv_sp_sum, beta.within.sp.sum, jaccard.sp_all, jac.
   left_join(sprichness.plot, by = c("LTER", "specialist")) %>%
   left_join(abund.plot, by = c("LTER", "specialist"))
 
-dis.richplot <- ggplot(traits.all, aes(x = avgrich, y = mean, color = stat)) + geom_point() +
+dis.richplot <- ggplot(traits.all, aes(x = avgrich, y = mean, color = stat)) +
   geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.5, width = 0.2) + 
   theme_classic() + labs(x = "Mean Annual Species Richness", y = "Mean Dissimilarity", color = "Beta Diversity Metric") +
   geom_smooth(method = "lm", se = F) + ylim(-0.15,1) + facet_wrap(~time) +
   theme(strip.background = element_blank(),
-        strip.text.x = element_text(size = 12, face = "bold"),
-        legend.position = c(0.12,0.80),
-        legend.background = element_rect(fill = "transparent"))
+        strip.text.x = element_text(size = 12, face = "bold")) +
+  geom_point(aes(shape = LTER))
+dis.richplota <- dis.richplot + theme(legend.position = "none")
 
-dis.abundplot <- ggplot(traits.all, aes(x = log10(avgabund), y = mean, color = stat)) + geom_point() +
+dis.abundplot <- ggplot(traits.all, aes(x = log10(avgabund), y = mean, color = stat)) +
   geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.5, width = 0.1) + 
   theme_classic() + labs(x = "Log(Mean Annual Abundance)", y = "Mean Dissimilarity", color = "Beta Diversity Metric") +
   geom_smooth(method = "lm", se = F) + ylim(-0.15,1) + facet_wrap(~time) +
   theme(strip.background = element_blank(),
-        strip.text.x = element_text(color = "white"),
-        legend.position = "none")
-plot_grid(dis.richplot, dis.abundplot, ncol = 1, labels = c("(a)", "(b)"))
+        strip.text.x = element_text(color = "white"), legend.position = "none") + geom_point(aes(shape = LTER))
+
+legend <- get_legend(dis.richplot)
+first_col <- plot_grid(dis.richplota, dis.abundplot, ncol = 1, labels = c("(a)","(b)"))
+plot_grid(first_col, legend, ncol = 2, rel_widths = c(1, 0.25))
