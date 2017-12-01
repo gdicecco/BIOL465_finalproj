@@ -10,10 +10,8 @@ require(tidyr)
 require(dplyr)
 require(ggplot2)
 require(cowplot)
-require(scales)
 
 ######### Read in datasets #########
-#setwd("/Volumes/hurlbertlab/DiCecco/LTER_birdabund_seasonal/") #Mac
 setwd("\\\\BioArk\\hurlbertlab\\DiCecco\\LTER_birdabund_seasonal\\") #Windows
 
 #For each dataset: change character strings to all lowercase and remove hyphens
@@ -80,22 +78,6 @@ luquillo_id <- luquillo_commonnames %>%
   left_join(checklist.subs, by = c("CommonName" = "Common_name")) %>%
   left_join(traits.subs, by = c("CommonName" = "CommonName"))
 
-###Check that all species were paired with an ID from checklist
-spp_parkriver <- unique(parkriver_id[,c(6,9)]) #102 spp
-spp_sev <- unique(sev_id[,8:9]) #83
-spp_konza <- unique(konza_id[,c(12,21)]) #137
-spp_luquillo <- unique(luquillo_id[,15:16]) #41
-
-#number of NAs
-sev.nas <- spp_sev[is.na(spp_sev$SISRecID),] #1
-parkriver.nas <- spp_parkriver[is.na(spp_parkriver$SISRecID),] #0
-konza.nas <- spp_konza[is.na(spp_konza$SISRecID),] #7
-luquillo.nas <- spp_luquillo[is.na(spp_luquillo$SISRecID),] #3
-
-konza_id <- konza_id[!konza_id$COMMONNAME %in% konza.nas$COMMONNAME,]
-luquillo_id <- luquillo_id[!luquillo_id$CommonName %in% luquillo.nas$CommonName,]
-sev_id <- sev_id[!sev_id$CommonName %in% sev.nas$CommonName,]
-
 ####make sure all sampling events for datasets have year and month
 parkriver_id$date <- as.Date(parkriver_id$Date, format = "%d-%h-%y")
 parkriver_id$year <- as.numeric(format(parkriver_id$date, format = "%Y"))
@@ -145,7 +127,6 @@ for(i in 1:length(IUCNids)) {
   }
 num_habitats <- data.frame(SISRecID = finescale_habitats[,1], Number_habitats = finescale_habitats[,2])
 #habitats range from 0-30
-#determine categories: lo medium hi specialization
 hist(num_habitats$Number_habitats)
 #0-5: lo
 #5-15: medium
@@ -232,7 +213,6 @@ for(k in 1:4) {
       betadiv[i,1] <- site
       betadiv[i,2] <- year
       betadiv[i,3] <- sum(beta1)/sum(beta2)
-      
     }
     print(length(na.omit(betadiv[,1])))
     betadivresults[betadivresults[,1] == k, ] <- na.omit(betadiv)
