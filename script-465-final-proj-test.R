@@ -728,18 +728,20 @@ traits.all <- bind_rows(betadiv_sp_sum, beta.within.sp.sum, jaccard.sp_all, jac.
 dis.richplot <- ggplot(traits.all, aes(x = avgrich, y = mean, color = stat)) +
   geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.5, width = 0.2) + 
   theme_classic() + labs(x = "Mean Annual Species Richness", y = "Mean Dissimilarity", color = "Beta Diversity Metric") +
-  geom_smooth(method = "lm", se = F) + ylim(-0.15,1) + facet_wrap(~time) +
+  geom_line(stat = "smooth", method = "lm", se = F, alpha = 0.5) + ylim(-0.15,1) + facet_wrap(~time) +
   theme(strip.background = element_blank(),
         strip.text.x = element_text(size = 12, face = "bold")) +
-  geom_point(aes(shape = LTER))
+  geom_point(aes(shape = specialist)) + scale_shape_discrete(name="No. of Habitats Used",
+                                                             breaks=c("high", "medium", "low"), 
+                                                             labels=c("High", "Medium", "Low"))
 dis.richplota <- dis.richplot + theme(legend.position = "none")
 
 dis.abundplot <- ggplot(traits.all, aes(x = log10(avgabund), y = mean, color = stat)) +
   geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.5, width = 0.1) + 
   theme_classic() + labs(x = "Log(Mean Annual Abundance)", y = "Mean Dissimilarity", color = "Beta Diversity Metric") +
-  geom_smooth(method = "lm", se = F) + ylim(-0.15,1) + facet_wrap(~time) +
+  geom_line(stat = "smooth", method = "lm", se = F, alpha = 0.5) + ylim(-0.15,1) + facet_wrap(~time) +
   theme(strip.background = element_blank(),
-        strip.text.x = element_text(color = "white"), legend.position = "none") + geom_point(aes(shape = LTER))
+        strip.text.x = element_text(color = "white"), legend.position = "none") + geom_point(aes(shape = specialist))
 
 legend <- get_legend(dis.richplot)
 first_col <- plot_grid(dis.richplota, dis.abundplot, ncol = 1, labels = c("(a)","(b)"))
