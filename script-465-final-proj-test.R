@@ -536,42 +536,58 @@ setwd("C:/Users/gdicecco/Desktop/git/BIOL465_finalproj/")
 #Fig. 1
 #species richness
 richness.plotdf <- richness[richness$month == 5 | richness$month == 6 ,]
-richness.mu <- richness.plotdf %>%
+richness.plotdf.summary <- richness.plotdf %>%
   group_by(LTER) %>%
-  summarize(mean = mean(richness)) %>%
-  left_join(richness.plotdf, by = "LTER")
+  summarize(slope = summary(lm(richness ~ year))$coefficients[2],
+            pval = summary(lm(richness ~ year))$coefficients[8],
+            rsquared = summary(lm(richness ~ year))$r.squared)
 ggplot(richness.mu, aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
-  labs(x = "Year", y = "Species Richness") + theme_classic() + geom_line(aes(x = year, y = mean, color = LTER), lty = 2)
+  labs(x = "Year", y = "Species Richness") +
+  theme_classic() + geom_line(stat = "smooth", method = "lm", lty = 2) + 
+  theme(text = element_text(size = 12))
 
 #Fig. 2
 #richness generalist/specialist
 annual.plot <- annualspecial[annualspecial$month != 1 & annualspecial$month != 11 & annualspecial$month != 3
                              & annualspecial$month != 2 & annualspecial$month != 12, ]
+annual.plot.summary <- na.omit(annual.plot) %>%
+  group_by(LTER, specialist) %>%
+  summarize(slope = summary(lm(total ~ year))$coefficients[2],
+            pval = summary(lm(total ~ year))$coefficients[8],
+            rsquared = summary(lm(total ~ year))$r.squared)
+
 annual.plot$specialist <- factor(annual.plot$specialist, levels = c("high", "medium", "low"))
-richplot <- ggplot(annual.plot, aes(x = year, y = total, fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
-  labs(x = "", y = "Species Richness", fill = "Number of Habitats Used") + 
-  theme_classic() + scale_fill_discrete(name = "Number of Habitats Used", 
+richplot <- ggplot(na.omit(annual.plot), aes(x = year, y = total, color = specialist)) + geom_point(alpha = 0.6) + geom_line(alpha = 0.6) + facet_grid(~LTER) +
+  labs(x = "", y = "Species Richness", color = "Number of Habitats Used") + 
+  theme_classic() + scale_color_discrete(name = "Number of Habitats Used", 
                               breaks = c("low", "medium", "high"), 
                               labels = c("Low", "Medium", "High")) +
   theme(strip.background = element_blank(),
-        strip.text.x = element_text(face = "bold"))
+        strip.text.x = element_text(face = "bold", size = 15),
+        text = element_text(size = 12)) + geom_line(stat = "smooth", method = "lm", lty = 2, cex = 1)
 richplota <- richplot + theme(legend.position = "none")
 
 #annual abundance
 abund.annual$specialist <- factor(abund.annual$specialist, levels = c("high", "medium", "low"))
-abundplot <- ggplot(abund.annual[abund.annual$month != 1 & abund.annual$month != 11 & abund.annual$month != 3
-                                 & abund.annual$month != 2,], aes(x = year, y = log10(abund), fill = specialist)) + geom_col(position = "stack") + facet_grid(~LTER) +
-  labs(x = "Year", y = "Log(Abundance)", fill = "Number of Habitats Used") + 
-  theme_classic() +  scale_fill_discrete(name = "Number of Habitats Used", 
+abund.plot.summary <- na.omit(abund.annual) %>%
+  group_by(LTER, specialist) %>%
+  summarize(slope = summary(lm(abund ~ year))$coefficients[2],
+            pval = summary(lm(abund ~ year))$coefficients[8],
+            rsquared = summary(lm(abund ~ year))$r.squared)
+
+abundplot <- ggplot(na.omit(abund.annual[abund.annual$month != 1 & abund.annual$month != 11 & abund.annual$month != 3
+                                 & abund.annual$month != 2,]), aes(x = year, y = log10(abund), color = specialist)) + geom_point(alpha = 0.6) + geom_line(alpha = 0.6) + facet_grid(~LTER) +
+  labs(x = "Year", y = "Log(Abundance)", color = "Number of Habitats Used") + 
+  theme_classic() +  scale_color_discrete(name = "Number of Habitats Used", 
                                breaks = c("low", "medium", "high"), 
                                labels = c("Low", "Medium", "High")) +
   theme(strip.background = element_blank(),
         strip.text.x = element_blank(),
-        legend.position = "none")
+        legend.position = "none", text = element_text(size = 12)) + geom_line(stat = "smooth", method = "lm", lty = 2, cex = 1)
 
 legend <- get_legend(richplot)
 first_col <- plot_grid(richplota, abundplot, ncol = 1, labels = c("(a)", "(b)"), label_size = 10)
-plot_grid(first_col, legend, ncol = 2, rel_widths = c(1, 0.25))
+plot_grid(first_col, legend, ncol = 2, rel_widths = c(1, 0.2))
 
 #Fig. 3
 #beta div
@@ -597,15 +613,48 @@ betadiv_all <- rbind(betadiv_summ, beta.within.sum,
                      spatial.sum, spatial.within.sum) %>%
   left_join(lats, by = "LTER")
 
-amongmod <- lm(mean ~ lat, data = betadiv_all)
+betadiv_all.summary <- betadiv_all %>%
+  group_by(time, stat) %>%
+  summarize(slope = summary(lm(mean ~ lat))$coefficients[2],
+            pval = summary(lm(mean ~ lat))$coefficients[8],
+            rsquared = summary(lm(mean ~ lat))$r.squared)
 
 #Among vs within year, all site
 ggplot(betadiv_all, aes(x = lat, y = mean, color = time)) + geom_point(cex = 2) + 
   geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.5, width = 1) +
   theme_classic() + labs(y = "Mean Dissimilarity", color = "", x = "Latitude")+ geom_smooth(method = "lm", se = F, lty = 2) +
-  facet_wrap(~stat) + theme(strip.background = element_blank())
+  facet_wrap(~stat) + theme(strip.background = element_blank(), text = element_text(size = 12))
 
 #Fig. 4
+#Among year, all sites, time series
+spatial.within2 <- spatial.within[,-c(3:4)]
+spatial.df2 <- spatial.df[,-c(3:4)]
+colnames(spatial.df2)[1] <- "LTER"
+beta.within2 <- beta.within[,-4]
+beta.time.all <- rbind(data.frame(betadiv.df, stat = "Bray-Curtis", time = "Among year"),
+                       data.frame(beta.within2, stat = "Bray-Curtis", time = "Within year"),
+                       data.frame(jaccard.df, stat = "Jaccard", time = "Among year"),
+                       data.frame(jac.within, stat = "Jaccard", time = "Within year"),
+                       data.frame(spatial.df2, stat = "Diversity corrected Jaccard", time = "Among year"),
+                       data.frame(spatial.within2, stat = "Diversity corrected Jaccard", time = "Within year"))
+
+ggplot(beta.time.all[beta.time.all$time == "Among year" & beta.time.all$beta != 1,], aes(x = year, y = beta, color = LTER)) + geom_point(alpha = 0.6) + geom_line(alpha = 0.6)  +
+  theme_classic() + labs(y = "Mean Dissimilarity", color = "", x = "Year")+ geom_smooth(method = "lm", se = F, lty = 2) +
+  facet_wrap(~stat, ncol = 3) + theme(strip.background = element_blank(), strip.text.x = element_text(face = "bold"), text = element_text(size = 12))
+
+beta.time.summary <- beta.time.all %>%
+  group_by(LTER, stat, time) %>%
+  summarize(slope = summary(lm(beta ~ year))$coefficients[2],
+            pval = summary(lm(beta ~ year))$coefficients[8],
+            rsquared = summary(lm(beta ~ year))$r.squared)
+
+#Fig. 5 
+#within year, all sites, time series
+ggplot(beta.time.all[beta.time.all$time == "Within year",], aes(x = year, y = beta, color = LTER)) + geom_point(alpha = 0.6) + geom_line(alpha = 0.6)  +
+  theme_classic() + labs(y = "Mean Dissimilarity", color = "", x = "Year")+ geom_smooth(method = "lm", se = F, lty = 2) +
+  facet_wrap(~stat, ncol = 3) + theme(strip.background = element_blank(), strip.text.x = element_text(face = "bold"), text = element_text(size = 12))
+
+#Fig. 6
 #Within and Among year by trait group for each LTER & beta diversity metric
 #Bray curtis
 betadiv_sp_sum <- rbind(data.frame(LTER = betadiv_special$LTER, mean = betadiv_special$meanHi, sd = betadiv_special$sdHi, cat = rep("high", times = 4)),
@@ -683,12 +732,18 @@ j.withinplot <- ggplot(jac.sp.within.sum, aes(x = LTER, y = mean, color = specia
   theme(legend.position = "none") +
   ylim(-0.15,1)
 
-
 plot_grid(amongplot, withinplot, sp.amongplot, sp.withinplot, j.amongplot, j.withinplot, align = "h",
           ncol = 2, nrow = 3,
           labels = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)"), label_size = 12)
 
-#Figure 5
+#Figure 7
+#Among year turnover by trait time series
+
+
+#Figure 8 
+#within year turnover by trait time series
+
+#Figure 9
 #Mean dissimilarity vs richness and abundance for trait groups
 sprichness.plot <- lter.df %>%
   group_by(LTER, specialist, year) %>%
@@ -725,12 +780,21 @@ traits.all <- bind_rows(betadiv_sp_sum, beta.within.sp.sum, jaccard.sp_all, jac.
   left_join(sprichness.plot, by = c("LTER", "specialist")) %>%
   left_join(abund.plot, by = c("LTER", "specialist"))
 
+traits.all.summary <- traits.all %>%
+  group_by(time, stat) %>%
+  summarize(slope.rich = summary(lm(mean ~ avgrich))$coefficients[2],
+            pval.rich = summary(lm(mean ~ avgrich))$coefficients[8],
+            r2.rich = summary(lm(mean ~ avgrich))$r.squared,
+            slope.abund = summary(lm(mean ~ avgabund))$coefficients[2],
+            pval.abund = summary(lm(mean ~ avgabund))$coefficients[8],
+            r2.abund = summary(lm(mean ~ avgabund))$r.squared)
+
 dis.richplot <- ggplot(traits.all, aes(x = avgrich, y = mean, color = stat)) +
   geom_errorbar(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.5, width = 0.2) + 
   theme_classic() + labs(x = "Mean Annual Species Richness", y = "Mean Dissimilarity", color = "Beta Diversity Metric") +
   geom_line(stat = "smooth", method = "lm", se = F, alpha = 0.5) + ylim(-0.15,1) + facet_wrap(~time) +
   theme(strip.background = element_blank(),
-        strip.text.x = element_text(size = 12, face = "bold")) +
+        strip.text.x = element_text(size = 15, face = "bold"), text = element_text(size = 12)) +
   geom_point(aes(shape = specialist)) + scale_shape_discrete(name="No. of Habitats Used",
                                                              breaks=c("high", "medium", "low"), 
                                                              labels=c("High", "Medium", "Low"))
@@ -741,8 +805,10 @@ dis.abundplot <- ggplot(traits.all, aes(x = log10(avgabund), y = mean, color = s
   theme_classic() + labs(x = "Log(Mean Annual Abundance)", y = "Mean Dissimilarity", color = "Beta Diversity Metric") +
   geom_line(stat = "smooth", method = "lm", se = F, alpha = 0.5) + ylim(-0.15,1) + facet_wrap(~time) +
   theme(strip.background = element_blank(),
-        strip.text.x = element_text(color = "white"), legend.position = "none") + geom_point(aes(shape = specialist))
+        strip.text.x = element_text(color = "white"), text = element_text(size = 12), legend.position = "none") + geom_point(aes(shape = specialist))
 
 legend <- get_legend(dis.richplot)
 first_col <- plot_grid(dis.richplota, dis.abundplot, ncol = 1, labels = c("(a)","(b)"))
 plot_grid(first_col, legend, ncol = 2, rel_widths = c(1, 0.25))
+
+
