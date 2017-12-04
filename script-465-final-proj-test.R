@@ -541,7 +541,7 @@ richness.plotdf.summary <- richness.plotdf %>%
   summarize(slope = summary(lm(richness ~ year))$coefficients[2],
             pval = summary(lm(richness ~ year))$coefficients[8],
             rsquared = summary(lm(richness ~ year))$r.squared)
-ggplot(richness.mu, aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
+ggplot(richness.plotdf, aes(x = year, y = richness, color = LTER)) + geom_point() + geom_line() +
   labs(x = "Year", y = "Species Richness") +
   theme_classic() + geom_line(stat = "smooth", method = "lm", lty = 2) + 
   theme(text = element_text(size = 12))
@@ -738,10 +738,29 @@ plot_grid(amongplot, withinplot, sp.amongplot, sp.withinplot, j.amongplot, j.wit
 
 #Figure 7
 #Among year turnover by trait time series
+trait.time <- rbind(data.frame(LTER = spatial.sp.df$site, year = spatial.sp.df[,2], beta = spatial.sp.df$beta.hi, specialist = "high", stat = "Diversity corrected Jaccard", time = "Among year"),
+                         data.frame(LTER = spatial.sp.df$site, year = spatial.sp.df[,2], beta = spatial.sp.df$beta.med, specialist = "medium", stat = "Diversity corrected Jaccard", time = "Among year"),
+                         data.frame(LTER = spatial.sp.df$site, year = spatial.sp.df[,2], beta = spatial.sp.df$beta.lo, specialist = "low", stat = "Diversity corrected Jaccard", time = "Among year"),
+                         data.frame(spatial.sp.within[,c(1:3,5)], stat = "Diversity corrected Jaccard", time = "Within year"),
+                         data.frame(betadiv.special.df[,1:2], beta = betadiv.special.df$betahi, specialist = "high", stat = "Bray-Curtis Index", time = "Among year"),
+                         data.frame(betadiv.special.df[,1:2], beta = betadiv.special.df$betamed, specialist = "medium", stat = "Bray-Curtis Index", time = "Among year"),
+                         data.frame(betadiv.special.df[,1:2], beta = betadiv.special.df$betalo, specialist = "low", stat = "Bray-Curtis Index", time = "Among year"),
+                         data.frame(beta.within.sp, stat = "Bray-Curtis Index", time = "Within year"),
+                    data.frame(jaccard.sp.df[,1:2], beta = jaccard.sp.df$beta.hi, specialist = "high", stat = "Jaccard", time = "Among year"),
+                    data.frame(jaccard.sp.df[,1:2], beta = jaccard.sp.df$beta.med, specialist = "medium", stat = "Jaccard", time = "Among year"),
+                    data.frame(jaccard.sp.df[,1:2], beta = jaccard.sp.df$beta.lo, specialist = "low", stat = "Jaccard", time = "Among year"),
+                    data.frame(jac.sp.within[,c(1:3,6)], stat = "Jaccard", time = "Within year"))
 
 
 #Figure 8 
 #within year turnover by trait time series
+ggplot(trait.time[trait.time$time == "Among year",], aes(x = year, y = beta, color = specialist)) + 
+  geom_point(alpha = 0.6) + geom_line(alpha = 0.6)  +
+  theme_classic() + labs(y = "Mean Dissimilarity", color = "", x = "Year")+ geom_smooth(method = "lm", se = F) + 
+  facet_wrap(~stat + LTER, ncol = 3) + theme(strip.background = element_blank(), strip.text.x = element_text(face = "bold"), text = element_text(size = 12))
+
+test.mod <- lm(beta ~ year + specialist, data = trait.time[trait.time$time == "Among year" & trait.time$stat == "Jaccard",])
+summary(test.mod)
 
 #Figure 9
 #Mean dissimilarity vs richness and abundance for trait groups
